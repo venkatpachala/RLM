@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from core.document import Document
+from core.prompts import build_leaf_prompt, build_synthesis_prompt
 from core.rlm_system import RLMResult
 
 
@@ -38,6 +39,8 @@ class OptimizedRLMConfig:
     log_path: Optional[str] = None
     focused_excerpt_words: int = 120
     max_focused_excerpts: int = 6
+    max_relevant_chunks: int = 6
+    min_chunk_score: int = 1
 
 
 class TrajectoryLogger:
@@ -67,10 +70,12 @@ class OptimizedRLMSystem:
     def __init__(
         self,
         llm,
+        recursive_llm=None,
         config: Optional[OptimizedRLMConfig] = None,
         verbose: bool = False,
     ):
         self.llm = llm
+        self.recursive_llm = recursive_llm or llm
         self.config = config or OptimizedRLMConfig()
         self.verbose = verbose
         self.logger = TrajectoryLogger(self.config.log_path)
@@ -83,7 +88,7 @@ class OptimizedRLMSystem:
 
     def run(self, document: Document, question: str) -> RLMResult:
         self._start_time = time.time()
-        self._llm_calls_at_start = self.llm.call_count
+        self._llm_calls_at_start = self._combined_call_count()
         self._max_depth_reached = 0
         self._had_failure = False
         self._failure_reason = None
@@ -97,7 +102,7 @@ class OptimizedRLMSystem:
 
         answer = self._process(document, question, depth=0)
         elapsed = time.time() - self._start_time
-        llm_calls = self.llm.call_count - self._llm_calls_at_start
+        llm_calls = self._combined_call_count() - self._llm_calls_at_start
 
         self.logger.log(
             "run_end",
@@ -144,6 +149,7 @@ class OptimizedRLMSystem:
             answer = self._summarize_leaf(document, question, depth, target_words=target)
         else:
             chunks = self._split_with_overlap(document, target, self.config.chunk_overlap_words)
+            chunks = self._prioritize_chunks(chunks, question)
             child_answers = [self._process(chunk, question, depth + 1) for chunk in chunks]
             answer = self._synthesize_answers(
                 question=question,
@@ -168,22 +174,15 @@ class OptimizedRLMSystem:
         target_words: int,
     ) -> str:
         content = self._select_leaf_content(document, question)
-        prompt = (
-            "DOCUMENT: {}\n"
-            "WORD COUNT: {}\n"
-            "QUESTION: {}\n\n"
-            "CHUNK TEXT:\n{}\n\n"
-            "Answer the question directly using only this chunk. "
-            "If this is part of a larger document, return a concise chunk-level answer."
-        ).format(
-            document.name,
-            document.word_count,
-            question,
-            content,
+        prompt = build_leaf_prompt(
+            document_name=document.name,
+            word_count=document.word_count,
+            question=question,
+            content=content,
         )
         self.logger.log("leaf_llm_call", depth=depth, document=document.name)
         try:
-            return self.llm.complete_text(prompt).strip()
+            return self._llm_for_depth(depth).complete_text(prompt).strip()
         except RuntimeError as exc:
             if self._is_prompt_limit_error(exc) and document.word_count > self.config.min_leaf_chunk_words:
                 smaller_target = max(
@@ -231,18 +230,13 @@ class OptimizedRLMSystem:
         if not self.config.enable_final_synthesis:
             return "\n\n".join(cleaned)
 
-        prompt = (
-            "DOCUMENT: {}\n"
-            "QUESTION: {}\n\n"
-            "Synthesize the following chunk summaries into one concise, non-redundant answer.\n\n"
-            "{}"
-        ).format(
-            document_name,
-            question,
-            "\n\n".join("- " + answer for answer in cleaned),
+        prompt = build_synthesis_prompt(
+            document_name=document_name,
+            question=question,
+            partial_answers=cleaned,
         )
         self.logger.log("synthesis_llm_call", depth=depth, document=document_name, count=len(cleaned))
-        return self.llm.complete_text(prompt).strip()
+        return self._llm_for_depth(depth).complete_text(prompt).strip()
 
     def _split_with_overlap(self, document: Document, target_words: int, overlap_words: int) -> list[Document]:
         words = document.word_count
@@ -271,6 +265,38 @@ class OptimizedRLMSystem:
             if excerpts:
                 return "\n\n".join(excerpts)
         return document.peek(0, document.word_count)
+
+    def _prioritize_chunks(self, chunks: list[Document], question: str) -> list[Document]:
+        """
+        Rank chunks by lexical relevance for lookup-style or fact-centric queries.
+        Falls back to the full ordered list when relevance is weak.
+        """
+        if len(chunks) <= self.config.max_relevant_chunks:
+            return chunks
+
+        terms = self._query_terms(question)
+        if not terms:
+            return chunks
+
+        scored = []
+        for index, chunk in enumerate(chunks):
+            score = self._chunk_relevance_score(chunk, terms)
+            scored.append((score, index, chunk))
+
+        strong = [item for item in scored if item[0] >= self.config.min_chunk_score]
+        if not strong:
+            return chunks
+
+        strong.sort(key=lambda item: (-item[0], item[1]))
+        selected = [item[2] for item in strong[: self.config.max_relevant_chunks]]
+        selected.sort(key=lambda chunk: chunks.index(chunk))
+        self.logger.log(
+            "chunk_prioritization",
+            selected=len(selected),
+            total=len(chunks),
+            question=question,
+        )
+        return selected
 
     def _extract_focused_excerpts(self, document: Document, question: str) -> list[str]:
         terms = self._query_terms(question)
@@ -306,6 +332,15 @@ class OptimizedRLMSystem:
         return excerpts
 
     @staticmethod
+    def _chunk_relevance_score(document: Document, terms: list[str]) -> int:
+        lowered = document.content.lower()
+        score = 0
+        for term in terms:
+            if term in lowered:
+                score += lowered.count(term) * max(1, min(4, len(term) // 4))
+        return score
+
+    @staticmethod
     def _is_lookup_question(question: str) -> bool:
         lower = question.lower()
         markers = ("email", "e-mail", "phone", "contact", "address", "who is", "what is the")
@@ -332,12 +367,21 @@ class OptimizedRLMSystem:
 
     def _budget_failure(self) -> Optional[str]:
         elapsed = time.time() - self._start_time
-        llm_calls = self.llm.call_count - self._llm_calls_at_start
+        llm_calls = self._combined_call_count() - self._llm_calls_at_start
         if elapsed > self.config.max_elapsed_sec:
             return "elapsed time exceeded {:.1f}s".format(self.config.max_elapsed_sec)
         if llm_calls >= self.config.max_llm_calls:
             return "llm calls exceeded {}".format(self.config.max_llm_calls)
         return None
+
+    def _llm_for_depth(self, depth: int):
+        return self.llm if depth == 0 else self.recursive_llm
+
+    def _combined_call_count(self) -> int:
+        total = self.llm.call_count
+        if self.recursive_llm is not self.llm:
+            total += self.recursive_llm.call_count
+        return total
 
     def _mark_failure(self, reason: str) -> None:
         self._had_failure = True

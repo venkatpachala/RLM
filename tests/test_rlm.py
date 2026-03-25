@@ -2,9 +2,11 @@ import json
 import tempfile
 import unittest
 
+from core.api import RLM, RLMConfig
 from core.document import Document
 from core.llm import BaseLanguageModel, MockLLM
 from core.optimized_rlm import OptimizedRLMConfig, OptimizedRLMSystem
+from core.parser import extract_final_literal
 from core.repl import REPLExecutor, REPLNamespace, _strip_markdown_fences
 from core.rlm_system import RLMSystem
 
@@ -105,6 +107,22 @@ class TokenLimitLLM(BaseLanguageModel):
         return response
 
 
+class RecursiveModelLLM(BaseLanguageModel):
+    def __init__(self, label: str, context_window: int = 6000):
+        super().__init__(context_window=context_window)
+        self.label = label
+
+    def generate(self, prompt: str) -> str:
+        response = 'final("{} generate")'.format(self.label)
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        response = "{} response".format(self.label)
+        self._record_call(prompt, response)
+        return response
+
+
 class RLMTests(unittest.TestCase):
     def test_prompt_mentions_peek_for_fits_document(self):
         executor = REPLExecutor(llm=MockLLM(context_window=1000), max_turns=2)
@@ -190,6 +208,32 @@ class RLMTests(unittest.TestCase):
         code = _strip_markdown_fences(text)
 
         self.assertEqual(code, 'final("hello")')
+
+    def test_extract_final_literal_parses_uppercase_alias(self):
+        self.assertEqual(extract_final_literal('FINAL("hello")'), "hello")
+
+    def test_repl_accepts_uppercase_final_alias(self):
+        doc = Document(name="doc", content="short content")
+        namespace = REPLNamespace(doc, "Q", lambda child, q: "ok")
+        result = REPLExecutor._safe_exec('FINAL("done")', namespace.as_exec_dict())
+
+        self.assertIsNone(result)
+        self.assertEqual(namespace._answer, "done")
+
+    def test_repl_helpers_support_regex_and_count(self):
+        doc = Document(name="doc", content="alpha beta alpha gamma")
+        namespace = REPLNamespace(doc, "Q", lambda child, q: "ok")
+        code = (
+            'text = peek(P, 0, len(P))\n'
+            'matches = count_matches(text, "alpha")\n'
+            'found = regex_search("alpha", text)\n'
+            'final(str(matches) + ":" + str(len(found)))'
+        )
+
+        error = REPLExecutor._safe_exec(code, namespace.as_exec_dict())
+
+        self.assertIsNone(error)
+        self.assertEqual(namespace._answer, "2:2")
 
     def test_run_success_is_not_based_on_answer_text(self):
         llm = DirectAnswerLLM("There is no answer in the appendix.")
@@ -287,6 +331,30 @@ class RLMTests(unittest.TestCase):
 
         self.assertIn("EXCERPT 1", selected)
         self.assertIn("sagarika.dash@example.com", selected)
+
+    def test_optimized_rlm_uses_recursive_model_for_children(self):
+        root_llm = RecursiveModelLLM("root")
+        child_llm = RecursiveModelLLM("child")
+        config = OptimizedRLMConfig(leaf_chunk_words=3, chunk_overlap_words=0, max_llm_calls=20)
+        doc = Document(name="doc", content="one two three four five six")
+
+        result = OptimizedRLMSystem(llm=root_llm, recursive_llm=child_llm, config=config).run(
+            doc,
+            "Summarize",
+        )
+
+        self.assertTrue(result.succeeded)
+        self.assertGreater(root_llm.call_count, 0)
+        self.assertGreater(child_llm.call_count, 0)
+
+    def test_rlm_api_complete_wraps_string_context(self):
+        llm = TextOnlyLLM()
+        api = RLM(llm=llm, config=RLMConfig(leaf_chunk_words=100, max_llm_calls=10))
+
+        result = api.complete("one two three four", "Summarize", document_name="inline.txt")
+
+        self.assertTrue(result.succeeded)
+        self.assertIn("Leaf summary", result.answer)
 
 
 if __name__ == "__main__":

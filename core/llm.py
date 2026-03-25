@@ -2,14 +2,16 @@
 core/llm.py - Layer 2: The LLM Oracle
 =======================================
 
-Provides two LLM backends:
+Provides LLM backends:
 
-  OpenRouterLLM   -- Real NVIDIA Llama-3.1-Nemotron-70B via OpenRouter API.
-                     Sends structured prompts, returns Python code strings.
+  OpenAICompatibleLLM -- Generic OpenAI-compatible chat backend.
+                         Can target OpenRouter and other compatible endpoints.
 
-  MockLLM         -- Offline simulation for testing (no API key required).
-                     Generates deterministic, syntactically-correct Python
-                     code that exercises the full RLM split/merge loop.
+  OpenRouterLLM       -- Convenience subclass for OpenRouter defaults.
+
+  MockLLM             -- Offline simulation for testing (no API key required).
+                         Generates deterministic, syntactically-correct Python
+                         code that exercises the full RLM split/merge loop.
 
 Both share the same BaseLanguageModel interface:
   .generate(prompt: str) -> str       # core oracle call
@@ -131,25 +133,28 @@ Rules:
 """
 
 
-class OpenRouterLLM(BaseLanguageModel):
+class OpenAICompatibleLLM(BaseLanguageModel):
     """
-    Calls NVIDIA Llama-3.1-Nemotron-70B via the OpenRouter REST API.
+    Calls any OpenAI-compatible chat completions endpoint.
 
     Args:
-        api_key:        Your OpenRouter API key (sk-or-v1-...).
+        api_key:        API key for the endpoint.
         context_window: Max words per chunk sent to LLM (default 6000).
-        model:          OpenRouter model slug to use.
+        model:          Model slug to use.
+        api_url:        Full chat completions endpoint URL.
+        referer:        Optional referer header.
+        title:          Optional title header.
         verbose:        Print call start/end markers.
     """
-
-    MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
-    API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
     def __init__(
         self,
         api_key: str,
         context_window: int = 6000,
-        model: Optional[str] = None,
+        model: str = "gpt-4o-mini",
+        api_url: str = "https://api.openai.com/v1/chat/completions",
+        referer: Optional[str] = None,
+        title: Optional[str] = None,
         verbose: bool = False,
     ):
         super().__init__(context_window=context_window)
@@ -164,7 +169,10 @@ class OpenRouterLLM(BaseLanguageModel):
                 "Install it with:  pip install requests"
             )
         self.api_key = api_key
-        self.model = model or self.MODEL
+        self.model = model
+        self.api_url = api_url
+        self.referer = referer
+        self.title = title
         self.verbose = verbose
 
     def generate(self, prompt: str) -> str:
@@ -178,9 +186,11 @@ class OpenRouterLLM(BaseLanguageModel):
         headers = {
             "Authorization": "Bearer {}".format(self.api_key),
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/rlm-project/rlm_v0",
-            "X-Title": "RLM Document Processor",
         }
+        if self.referer:
+            headers["HTTP-Referer"] = self.referer
+        if self.title:
+            headers["X-Title"] = self.title
 
         payload = {
             "model": self.model,
@@ -196,7 +206,7 @@ class OpenRouterLLM(BaseLanguageModel):
         for attempt in range(3):
             try:
                 resp = _requests.post(
-                    self.API_URL,
+                    self.api_url,
                     headers=headers,
                     json=payload,
                     timeout=60,
@@ -220,7 +230,7 @@ class OpenRouterLLM(BaseLanguageModel):
                 except Exception:
                     msg = str(e)
                 last_error = RuntimeError(
-                    "OpenRouter HTTP {} error: {}".format(status, msg)
+                    "Chat completion HTTP {} error: {}".format(status, msg)
                 )
                 if status in (429, 500, 502, 503) and attempt < 2:
                     time.sleep(2 ** attempt)
@@ -232,7 +242,7 @@ class OpenRouterLLM(BaseLanguageModel):
                 break
 
         raise RuntimeError(
-            "OpenRouter API call failed after retries: {}".format(last_error)
+            "Chat completion call failed after retries: {}".format(last_error)
         )
 
     def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
@@ -243,9 +253,11 @@ class OpenRouterLLM(BaseLanguageModel):
         headers = {
             "Authorization": "Bearer {}".format(self.api_key),
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/rlm-project/rlm_v0",
-            "X-Title": "RLM Document Processor",
         }
+        if self.referer:
+            headers["HTTP-Referer"] = self.referer
+        if self.title:
+            headers["X-Title"] = self.title
 
         payload = {
             "model": self.model,
@@ -261,7 +273,7 @@ class OpenRouterLLM(BaseLanguageModel):
         for attempt in range(3):
             try:
                 resp = _requests.post(
-                    self.API_URL,
+                    self.api_url,
                     headers=headers,
                     json=payload,
                     timeout=60,
@@ -283,7 +295,7 @@ class OpenRouterLLM(BaseLanguageModel):
                 except Exception:
                     msg = str(e)
                 last_error = RuntimeError(
-                    "OpenRouter HTTP {} error: {}".format(status, msg)
+                    "Chat completion HTTP {} error: {}".format(status, msg)
                 )
                 if status in (429, 500, 502, 503) and attempt < 2:
                     time.sleep(2 ** attempt)
@@ -294,7 +306,33 @@ class OpenRouterLLM(BaseLanguageModel):
                 break
 
         raise RuntimeError(
-            "OpenRouter text call failed after retries: {}".format(last_error)
+            "Text completion call failed after retries: {}".format(last_error)
+        )
+
+
+class OpenRouterLLM(OpenAICompatibleLLM):
+    """
+    Convenience backend for OpenRouter with the existing project defaults.
+    """
+
+    MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
+    API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+    def __init__(
+        self,
+        api_key: str,
+        context_window: int = 6000,
+        model: Optional[str] = None,
+        verbose: bool = False,
+    ):
+        super().__init__(
+            api_key=api_key,
+            context_window=context_window,
+            model=model or self.MODEL,
+            api_url=self.API_URL,
+            referer="https://github.com/rlm-project/rlm_v0",
+            title="RLM Document Processor",
+            verbose=verbose,
         )
 
 

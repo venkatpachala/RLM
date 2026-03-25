@@ -27,6 +27,8 @@ Key classes:
 from __future__ import annotations
 
 import ast
+import json
+import re
 import sys
 import time
 import traceback
@@ -34,6 +36,8 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional
 
 from core.document import Document
+from core.parser import extract_final_literal
+from core.prompts import build_repl_task_suffix
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +95,13 @@ _ALLOWED_CALL_NAMES = {
     "sub_call",
     "merge",
     "final",
+    "FINAL",
+    "FINAL_VAR",
+    "find_all",
+    "count_matches",
+    "regex_search",
+    "parse_json",
+    "to_json",
     "len",
     "range",
     "enumerate",
@@ -372,6 +383,41 @@ class REPLNamespace:
         self._answer = str(answer).strip()
         self._is_done = True
 
+    def _fn_find_all(self, text, needle) -> list[int]:
+        """Return all start offsets where *needle* occurs in *text*."""
+        haystack = str(text)
+        target = str(needle)
+        if not target:
+            return []
+        out = []
+        start = 0
+        while True:
+            idx = haystack.find(target, start)
+            if idx < 0:
+                return out
+            out.append(idx)
+            start = idx + max(1, len(target))
+
+    def _fn_count_matches(self, text, needle) -> int:
+        """Count case-insensitive substring matches."""
+        haystack = str(text).lower()
+        target = str(needle).lower()
+        if not target:
+            return 0
+        return haystack.count(target)
+
+    def _fn_regex_search(self, pattern, text) -> list[str]:
+        """Return regex matches as strings."""
+        return [str(match) for match in re.findall(str(pattern), str(text))]
+
+    def _fn_parse_json(self, text):
+        """Parse a JSON string into Python primitives."""
+        return json.loads(str(text))
+
+    def _fn_to_json(self, obj) -> str:
+        """Serialize supported objects to JSON."""
+        return json.dumps(obj, ensure_ascii=True, sort_keys=True)
+
     # ------------------------------------------------------------------
     # Build the globals dict for exec()
     # ------------------------------------------------------------------
@@ -392,6 +438,13 @@ class REPLNamespace:
             "sub_call": self._fn_sub_call,
             "merge":    self._fn_merge,
             "final":    self._fn_final,
+            "FINAL":    self._fn_final,
+            "FINAL_VAR": self._fn_final,
+            "find_all": self._fn_find_all,
+            "count_matches": self._fn_count_matches,
+            "regex_search": self._fn_regex_search,
+            "parse_json": self._fn_parse_json,
+            "to_json": self._fn_to_json,
         })
         return scope
 
@@ -501,6 +554,10 @@ class REPLExecutor:
                 continue
 
             code = _strip_markdown_fences(code)
+            final_literal = extract_final_literal(code)
+            if final_literal is not None:
+                namespace._fn_final(final_literal)
+                code = 'final("{}")'.format(final_literal.replace('"', '\\"'))
 
             if self.verbose:
                 print("  [REPL] Code ({} chars):\n{}".format(len(code), _indent(code, "    | ")))
@@ -596,36 +653,15 @@ class REPLExecutor:
             "",
         ]
 
-        if fits:
-            parts += [
-                "The document FITS in the context window.",
-                "Read the preview above (it contains the full document text if word count <= {}).".format(
-                    self.PREVIEW_WORDS
-                ),
-                "If the preview is truncated, use peek(P, 0, WORD_COUNT) to inspect the full chunk before answering.",
-                "Answer directly only after you have seen enough of the chunk.",
-                "You may still split if the chunk appears internally too large to reason about.",
-                "Use the live variable P for the document object. Never pass a filename string like 'document.pdf' into split() or peek().",
-                "If you use keyword arguments, use exactly these names: split(P=..., k=...), peek(P=..., start=..., end=...), sub_call(doc=..., q=...).",
-                "",
-                "Write Python code using only: split(P, k), peek(P, start, end), sub_call(chunk, Q), merge(results), final(answer).",
-                "End with exactly one call to final().",
-            ]
-        else:
-            k_suggestion = max(
-                2,
-                (document.word_count + self.llm.context_window - 1) // self.llm.context_window,
-            )
-            parts += [
-                "The document does NOT fit in the context window.",
-                "You MUST split it into chunks and call sub_call() on each chunk.",
-                "Suggested split size: split(P, {})  -- adjust if needed.".format(k_suggestion),
-                "Use the live variable P for the document object. Never pass a filename string like 'document.pdf' into split() or peek().",
-                "If you use keyword arguments, use exactly these names: split(P=..., k=...), peek(P=..., start=..., end=...), sub_call(doc=..., q=...).",
-                "",
-                "Write Python code using only: split(P, k), peek(P, start, end), sub_call(chunk, Q), merge(results), final(answer).",
-                "End with exactly one call to final().",
-            ]
+        k_suggestion = max(
+            2,
+            (document.word_count + self.llm.context_window - 1) // self.llm.context_window,
+        )
+        parts += build_repl_task_suffix(
+            fits=fits,
+            preview_words=self.PREVIEW_WORDS,
+            k_suggestion=k_suggestion,
+        )
 
         return "\n".join(parts)
 
