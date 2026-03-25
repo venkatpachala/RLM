@@ -141,6 +141,9 @@ class RLMSystem:
         # The main recursive call (depth=0)
         answer = self._call(document, question, depth=0)
 
+        if not self._had_failure:
+            answer = self._synthesize_final_answer(document, question, answer)
+
         elapsed = time.time() - self._start_time
         llm_calls = self.llm.call_count - self._llm_calls_at_start
 
@@ -231,3 +234,40 @@ class RLMSystem:
         self._had_failure = True
         if self._failure_reason is None:
             self._failure_reason = reason
+
+    def _synthesize_final_answer(
+        self,
+        document: Document,
+        question: str,
+        answer: str,
+    ) -> str:
+        """
+        Run one final synthesis pass over merged chunk answers when useful.
+        Falls back to the original answer if synthesis fails.
+        """
+        paragraphs = [part.strip() for part in answer.split("\n\n") if part.strip()]
+        if len(paragraphs) < 3:
+            return answer
+
+        synthesis_doc = Document(
+            name=document.name + " [merged summaries]",
+            content=answer,
+        )
+        synthesis_question = (
+            "Synthesize these chunk-level answers into one concise, non-redundant answer to: "
+            "{}. Remove duplication, preserve important facts, and return one coherent summary."
+        ).format(question)
+
+        executor = REPLExecutor(
+            llm=self.llm,
+            max_turns=min(3, self.max_turns_per_node),
+            verbose=self.verbose,
+        )
+        result = executor.run(
+            document=synthesis_doc,
+            question=synthesis_question,
+            sub_call_handler=lambda child_doc, child_q: self._call(child_doc, child_q, self.max_depth + 1),
+        )
+        if result.succeeded and result.answer.strip():
+            return result.answer
+        return answer

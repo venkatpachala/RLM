@@ -123,6 +123,7 @@ _ALLOWED_CALL_NAMES = {
 _ALLOWED_AST_NODES = (
     ast.Module,
     ast.Assign,
+    ast.AugAssign,
     ast.Expr,
     ast.Name,
     ast.Load,
@@ -243,6 +244,12 @@ class _SafeCodeValidator(ast.NodeVisitor):
     def visit_Assign(self, node):
         for target in node.targets:
             self._validate_assignment_target(target)
+        self.visit(node.value)
+
+    def visit_AugAssign(self, node):
+        self._validate_assignment_target(node.target)
+        if not isinstance(node.op, ast.Add):
+            raise UnsafeCodeError("Only += is allowed for augmented assignment.")
         self.visit(node.value)
 
     def visit_For(self, node):
@@ -668,17 +675,68 @@ class REPLExecutor:
 
 def _strip_markdown_fences(text: str) -> str:
     """
-    Remove ```python ... ``` or ``` ... ``` fences from LLM output.
-    Returns the raw code inside (or the whole text if no fences found).
+    Extract Python-like code from LLM output.
+    Handles fenced blocks and chatty prose before the code block.
     """
-    lines = text.strip().splitlines()
-    # Strip opening fence
-    if lines and lines[0].startswith("```"):
-        lines = lines[1:]
-    # Strip closing fence
-    if lines and lines[-1].strip() == "```":
-        lines = lines[:-1]
-    return "\n".join(lines).strip()
+    stripped = text.strip()
+    if not stripped:
+        return ""
+
+    lines = stripped.splitlines()
+
+    fence_start = None
+    for idx, line in enumerate(lines):
+        if line.strip().startswith("```"):
+            fence_start = idx
+            break
+    if fence_start is not None:
+        fence_end = None
+        for idx in range(fence_start + 1, len(lines)):
+            if lines[idx].strip() == "```":
+                fence_end = idx
+                break
+        if fence_end is not None:
+            inner = "\n".join(lines[fence_start + 1:fence_end]).strip()
+            if inner:
+                return inner
+            lines = lines[:fence_start] + lines[fence_end + 1:]
+
+    code_start = None
+    for idx, line in enumerate(lines):
+        if _looks_like_code_line(line):
+            code_start = idx
+            break
+
+    if code_start is not None:
+        return "\n".join(lines[code_start:]).strip()
+    return stripped
+
+
+def _looks_like_code_line(line: str) -> bool:
+    """Heuristic for finding where Python code starts in a chatty model response."""
+    stripped = line.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("#"):
+        return True
+    code_prefixes = (
+        "final(",
+        "chunks =",
+        "results =",
+        "combined",
+        "answer =",
+        "summary =",
+        "main_points",
+        "full_text =",
+        "full_document_text =",
+        "for ",
+        "if ",
+    )
+    if stripped.startswith(code_prefixes):
+        return True
+    if "=" in stripped and not stripped.startswith(("Since ", "The ", "However", "Given ")):
+        return True
+    return False
 
 
 def _indent(text: str, prefix: str) -> str:

@@ -2,7 +2,7 @@ import unittest
 
 from core.document import Document
 from core.llm import BaseLanguageModel, MockLLM
-from core.repl import REPLExecutor, REPLNamespace
+from core.repl import REPLExecutor, REPLNamespace, _strip_markdown_fences
 from core.rlm_system import RLMSystem
 
 
@@ -27,6 +27,23 @@ class AlwaysSplitLLM(BaseLanguageModel):
             "results = [sub_call(c, Q) for c in chunks]\n"
             "final(merge(results))"
         )
+        self._record_call(prompt, response)
+        return response
+
+
+class SynthesisLLM(BaseLanguageModel):
+    def __init__(self, context_window: int = 6000):
+        super().__init__(context_window=context_window)
+
+    def generate(self, prompt: str) -> str:
+        if "Synthesize these chunk-level answers" in prompt:
+            response = 'final("Unified summary.")'
+        else:
+            response = (
+                "chunks = split(P, 2)\n"
+                "results = [sub_call(c, Q) for c in chunks]\n"
+                "final(merge(results))"
+            )
         self._record_call(prompt, response)
         return response
 
@@ -95,6 +112,28 @@ class RLMTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("execution time limit", error)
 
+    def test_safe_exec_allows_string_augassign(self):
+        doc = Document(name="doc", content="hello world")
+        namespace = REPLNamespace(doc, "Q", lambda child, q: "ok")
+        code = 'answer = "A"\nanswer += "B"\nfinal(answer)'
+
+        error = REPLExecutor._safe_exec(code, namespace.as_exec_dict())
+
+        self.assertIsNone(error)
+        self.assertEqual(namespace._answer, "AB")
+
+    def test_strip_markdown_fences_extracts_code_after_prose(self):
+        text = (
+            "Since the document fits, we can answer directly.\n\n"
+            "```python\n"
+            "final(\"hello\")\n"
+            "```"
+        )
+
+        code = _strip_markdown_fences(text)
+
+        self.assertEqual(code, 'final("hello")')
+
     def test_run_success_is_not_based_on_answer_text(self):
         llm = DirectAnswerLLM("There is no answer in the appendix.")
         doc = Document(name="doc", content="short content")
@@ -116,6 +155,19 @@ class RLMTests(unittest.TestCase):
 
         self.assertFalse(result.succeeded)
         self.assertIn("depth limit", result.failure_reason.lower())
+
+    def test_run_synthesizes_multi_paragraph_answers(self):
+        llm = SynthesisLLM()
+        system = RLMSystem(llm=llm, max_depth=2, max_turns_per_node=2)
+        doc = Document(name="doc", content="one two three four")
+
+        result = system._synthesize_final_answer(
+            doc,
+            "Summarize",
+            "Point A.\n\nPoint B.\n\nPoint C.",
+        )
+
+        self.assertEqual(result, "Unified summary.")
 
 
 if __name__ == "__main__":
