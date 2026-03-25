@@ -1,0 +1,33 @@
+============================================================
+RLM Result
+============================================================
+Document : document.pdf
+Question : Summarize the document
+LLM calls: 12
+Time     : 0.0s
+Success  : True
+
+Answer:
+------------------------------------------------------------
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+
+This section covers information extracted directly from the document chunk (5912 words).  [MockLLM simulated answer]
+------------------------------------------------------------
