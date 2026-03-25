@@ -2,32 +2,43 @@
 RLM Result
 ============================================================
 Document : document.pdf
-Question : Summarize the document
-LLM calls: 12
-Time     : 0.0s
+Question : Summarize the main points
+LLM calls: 34
+Time     : 258.4s
 Success  : True
 
 Answer:
 ------------------------------------------------------------
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The Manual of Parliamentary Procedures in the Government of India was revised. Key updates include revised consultation procedures between Ministries/Departments and the Ministry of Law & Justice to reduce delays, as per suggestions from various Ministries and the Cabinet Secretariat.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+Guidelines for parliamentary procedures, including document availability, no reference to other House proceedings, questions on the printed list must be answered, and language of response matches the question's language.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The main points are: (a) initiating action to gather material for the President's address, (b) preparing and approving material by concerned sections, and (c) consolidating and editing the material into an integrated document.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The document discusses the procedures for introducing a bill in the Rajya Sabha/Lok Sabha, including submission of memoranda, circulation among members, publication in the Gazette of India, and optional pre-introduction publication with the Chairman/Speaker's permission. Key steps and quantities (e.g., number of copies in English and Hindi) are outlined for the Ministry/Department and the Secretariat.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The main points are: (a) frame draft rules, (b) publish in the official gazette for 30 days to gather objections/suggestions, (c) seek comments from affected interests, (d) consider received objections/suggestions after 30 days, and (e) notify final rules within six months if numerous suggestions/objections are received.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The main points include: appointing sub-Committees, their functions such as studying background material, preparing questionnaires, undertaking study tours, taking oral evidence, and drafting reports.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The main points discuss procedures for: (1) assigning parliamentary work to another Minister after a resignation, (2) updating parliamentary papers, and (3) supplying documents and publications to the Parliament library.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+Main points: (1) Exceptional grants can be made for services with uncertain magnitude or character. (2) Such grants are not part of the current financial year's service.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The Ministry of Parliamentary Affairs links Parliament and Government, handling diverse parliamentary work. Created in 1949 as a Department, it became a Ministry in 1986, with functions outlined under the Government of India (Allocation of Business) Rules, 1961.
 
-This section covers information extracted directly from the document chunk (5916 words).  [MockLLM simulated answer]
+The document outlines a proforma for legislative and other proposals, including sections for bill titles, purport, preparedness, introduction dates, and officer contact information. It also references non-legislative business and parliamentary procedures.
 
-This section covers information extracted directly from the document chunk (5912 words).  [MockLLM simulated answer]
+The document is a 'REGISTER OF ASSURANCES GIVEN IN PARLIAMENT'. Key points: Records assurances with date, MP's name, subject, promise, and implementation due date. Maintained by the concerned section in Rajya Sabha or Lok Sabha. Outlines required information for each entry, including sources and extension provisions.
+
+The document discusses parliamentary procedures, specifically templates for motions to withdraw bills in the Indian legislative houses (Rajya Sabha/Lok Sabha), including notices and copies to relevant ministries, as well as guidelines for ministerial communication.
+
+Main points: (1) Members' participation rules, (2) TA/DA entitlements, (3) Meeting presiding rules, (4) Committee dissolution conditions.
+
+The document appears to be a directory of Indian government officials and parliamentary procedures.
+           Key points include:
+           1. Contact information for Deputy Secretaries (e.g., Shri Arun Kumar, Shri Vijay Kumar) 
+              and Executive Officers (e.g., Shri Rajpal Singh) in various government buildings.
+           2. Index references to parliamentary procedures, including acts, adjournment motions, 
+              and gazette publications, as outlined in Annexure II 228 Manual of Parliamentary Procedures.
 ------------------------------------------------------------

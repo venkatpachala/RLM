@@ -183,6 +183,9 @@ class _SafeCodeValidator(ast.NodeVisitor):
         super().generic_visit(node)
 
     def visit_Attribute(self, node):
+        if self._is_safe_method_attribute(node):
+            self.visit(node.value)
+            return
         raise UnsafeCodeError("Attribute access is not allowed.")
 
     def visit_Import(self, node):
@@ -219,12 +222,17 @@ class _SafeCodeValidator(ast.NodeVisitor):
         raise UnsafeCodeError("nonlocal is not allowed.")
 
     def visit_Call(self, node):
-        if not isinstance(node.func, ast.Name):
-            raise UnsafeCodeError("Only direct function calls are allowed.")
-        if node.func.id not in _ALLOWED_CALL_NAMES:
-            raise UnsafeCodeError(
-                "Call to '{}' is not allowed.".format(node.func.id)
-            )
+        if isinstance(node.func, ast.Name):
+            if node.func.id not in _ALLOWED_CALL_NAMES:
+                raise UnsafeCodeError(
+                    "Call to '{}' is not allowed.".format(node.func.id)
+                )
+        elif isinstance(node.func, ast.Attribute):
+            if not self._is_safe_method_attribute(node.func):
+                raise UnsafeCodeError("Only approved method calls are allowed.")
+            self.visit(node.func.value)
+        else:
+            raise UnsafeCodeError("Only approved function calls are allowed.")
         self.generic_visit(node)
 
     def visit_Name(self, node):
@@ -262,6 +270,15 @@ class _SafeCodeValidator(ast.NodeVisitor):
             return
         raise UnsafeCodeError(
             "Invalid assignment target: {}".format(type(node).__name__)
+        )
+
+    @staticmethod
+    def _is_safe_method_attribute(node):
+        return (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.attr in {"append", "extend"}
+            and not node.value.id.startswith("__")
         )
 
 
@@ -302,34 +319,34 @@ class REPLNamespace:
     # The five RLM primitives (called from exec()'d LLM code)
     # ------------------------------------------------------------------
 
-    def _fn_split(self, doc: Document, k: int) -> List[Document]:
-        """Split document *doc* into *k* equal chunks."""
-        if not isinstance(doc, Document):
+    def _fn_split(self, P: Document, k: int) -> List[Document]:
+        """Split document *P* into *k* equal chunks."""
+        if not isinstance(P, Document):
             raise TypeError(
-                "split() first argument must be a Document, got {!r}".format(type(doc).__name__)
+                "split() first argument must be a Document, got {!r}".format(type(P).__name__)
             )
         if not isinstance(k, int) or k < 1:
             raise ValueError(
                 "split(doc, k): k must be a positive integer, got {!r}".format(k)
             )
-        return doc.split(k)
+        return P.split(k)
 
-    def _fn_peek(self, doc: Document, start: int, end: int) -> str:
-        """Read words[start:end] of *doc* as a string."""
-        if not isinstance(doc, Document):
+    def _fn_peek(self, P: Document, start: int, end: int) -> str:
+        """Read words[start:end] of *P* as a string."""
+        if not isinstance(P, Document):
             raise TypeError(
-                "peek() first argument must be a Document, got {!r}".format(type(doc).__name__)
+                "peek() first argument must be a Document, got {!r}".format(type(P).__name__)
             )
-        return doc.peek(start, end)
+        return P.peek(start, end)
 
-    def _fn_sub_call(self, doc: Document, question: str) -> str:
-        """Recursively process *doc* with *question* via RLMSystem._call()."""
+    def _fn_sub_call(self, doc: Document, q: str) -> str:
+        """Recursively process *doc* with *q* via RLMSystem._call()."""
         if not isinstance(doc, Document):
             raise TypeError(
                 "sub_call() first argument must be a Document, got {!r}".format(type(doc).__name__)
             )
         self._sub_call_count += 1
-        return self._sub_call_handler(doc, str(question))
+        return self._sub_call_handler(doc, str(q))
 
     def _fn_merge(self, answers) -> str:
         """
@@ -581,6 +598,8 @@ class REPLExecutor:
                 "If the preview is truncated, use peek(P, 0, WORD_COUNT) to inspect the full chunk before answering.",
                 "Answer directly only after you have seen enough of the chunk.",
                 "You may still split if the chunk appears internally too large to reason about.",
+                "Use the live variable P for the document object. Never pass a filename string like 'document.pdf' into split() or peek().",
+                "If you use keyword arguments, use exactly these names: split(P=..., k=...), peek(P=..., start=..., end=...), sub_call(doc=..., q=...).",
                 "",
                 "Write Python code using only: split(P, k), peek(P, start, end), sub_call(chunk, Q), merge(results), final(answer).",
                 "End with exactly one call to final().",
@@ -594,6 +613,8 @@ class REPLExecutor:
                 "The document does NOT fit in the context window.",
                 "You MUST split it into chunks and call sub_call() on each chunk.",
                 "Suggested split size: split(P, {})  -- adjust if needed.".format(k_suggestion),
+                "Use the live variable P for the document object. Never pass a filename string like 'document.pdf' into split() or peek().",
+                "If you use keyword arguments, use exactly these names: split(P=..., k=...), peek(P=..., start=..., end=...), sub_call(doc=..., q=...).",
                 "",
                 "Write Python code using only: split(P, k), peek(P, start, end), sub_call(chunk, Q), merge(results), final(answer).",
                 "End with exactly one call to final().",

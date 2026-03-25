@@ -95,6 +95,16 @@ Rules you MUST follow:
      Answer directly only after you have inspected enough text.
   5. When the document does NOT fit (fits=False), call split() then sub_call() on each chunk.
   6. Use merge() to combine sub_call results before calling final().
+  7. Use the live variables exactly as provided:
+     - Use P for the current Document object, never a string like "document.pdf"
+     - Use Q for the current question unless you intentionally rewrite it
+  8. Valid examples:
+     - chunks = split(P, 4)
+     - results.append(sub_call(doc=chunk, q=Q))
+  9. Invalid examples:
+     - split(P="document.pdf", k=4)
+     - split("document.pdf", 4)
+     - sub_call(chunk=chunk, question=Q)
 
 Example (document fits in window):
   final("The document discusses climate change impacts on coastal regions.")

@@ -51,6 +51,36 @@ class RLMTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("Attribute access is not allowed", error)
 
+    def test_safe_exec_allows_list_append_pattern(self):
+        doc = Document(name="doc", content="hello world")
+        namespace = REPLNamespace(doc, "Q", lambda child, q: "ok")
+        code = (
+            "results = []\n"
+            "results.append('ok')\n"
+            "final(merge(results))"
+        )
+
+        error = REPLExecutor._safe_exec(code, namespace.as_exec_dict())
+
+        self.assertIsNone(error)
+        self.assertEqual(namespace._answer, "ok")
+
+    def test_repl_functions_accept_prompt_keyword_names(self):
+        doc = Document(name="doc", content="one two three four")
+        namespace = REPLNamespace(doc, "Q", lambda child, q: q)
+        code = (
+            "chunks = split(P=P, k=2)\n"
+            "results = []\n"
+            "for chunk in chunks:\n"
+            "    results.append(sub_call(doc=chunk, q=Q))\n"
+            "final(merge(results))"
+        )
+
+        error = REPLExecutor._safe_exec(code, namespace.as_exec_dict())
+
+        self.assertIsNone(error)
+        self.assertEqual(namespace._answer, "Q\n\nQ")
+
     def test_safe_exec_times_out_busy_code(self):
         doc = Document(name="doc", content="hello world")
         namespace = REPLNamespace(doc, "Q", lambda child, q: "ok")
