@@ -1,7 +1,10 @@
+import json
+import tempfile
 import unittest
 
 from core.document import Document
 from core.llm import BaseLanguageModel, MockLLM
+from core.optimized_rlm import OptimizedRLMConfig, OptimizedRLMSystem
 from core.repl import REPLExecutor, REPLNamespace, _strip_markdown_fences
 from core.rlm_system import RLMSystem
 
@@ -13,6 +16,11 @@ class DirectAnswerLLM(BaseLanguageModel):
 
     def generate(self, prompt: str) -> str:
         response = 'final("{}")'.format(self.answer.replace('"', '\\"'))
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        response = self.answer
         self._record_call(prompt, response)
         return response
 
@@ -30,6 +38,11 @@ class AlwaysSplitLLM(BaseLanguageModel):
         self._record_call(prompt, response)
         return response
 
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        response = "split summary"
+        self._record_call(prompt, response)
+        return response
+
 
 class SynthesisLLM(BaseLanguageModel):
     def __init__(self, context_window: int = 6000):
@@ -44,6 +57,50 @@ class SynthesisLLM(BaseLanguageModel):
                 "results = [sub_call(c, Q) for c in chunks]\n"
                 "final(merge(results))"
             )
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        response = "Unified summary."
+        self._record_call(prompt, response)
+        return response
+
+
+class TextOnlyLLM(BaseLanguageModel):
+    def __init__(self, context_window: int = 6000):
+        super().__init__(context_window=context_window)
+
+    def generate(self, prompt: str) -> str:
+        response = 'final("unused")'
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        if "Synthesize the following chunk summaries" in prompt:
+            response = "Final synthesized answer."
+        else:
+            response = "Leaf summary."
+        self._record_call(prompt, response)
+        return response
+
+
+class TokenLimitLLM(BaseLanguageModel):
+    def __init__(self, context_window: int = 6000):
+        super().__init__(context_window=context_window)
+
+    def generate(self, prompt: str) -> str:
+        response = 'final("unused")'
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt=None) -> str:
+        if "Synthesize the following chunk summaries" in prompt:
+            response = "Backoff synthesis."
+            self._record_call(prompt, response)
+            return response
+        if "WORD COUNT: 4" in prompt:
+            raise RuntimeError("OpenRouter text call failed after retries: Prompt tokens limit exceeded: 4889 > 1954")
+        response = "Recovered leaf answer."
         self._record_call(prompt, response)
         return response
 
@@ -168,6 +225,68 @@ class RLMTests(unittest.TestCase):
         )
 
         self.assertEqual(result, "Unified summary.")
+
+    def test_optimized_rlm_runs_and_synthesizes(self):
+        llm = TextOnlyLLM()
+        config = OptimizedRLMConfig(leaf_chunk_words=3, chunk_overlap_words=0, max_llm_calls=20)
+        doc = Document(name="doc", content="one two three four five six")
+
+        result = OptimizedRLMSystem(llm=llm, config=config).run(doc, "Summarize")
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.answer, "Final synthesized answer.")
+
+    def test_optimized_rlm_writes_jsonl_logs(self):
+        llm = TextOnlyLLM()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log_path = tmpdir + "/trajectory.jsonl"
+            config = OptimizedRLMConfig(
+                leaf_chunk_words=10,
+                log_path=log_path,
+                max_llm_calls=10,
+            )
+            doc = Document(name="doc", content="one two three four")
+
+            result = OptimizedRLMSystem(llm=llm, config=config).run(doc, "Summarize")
+
+            self.assertTrue(result.succeeded)
+            with open(log_path, "r", encoding="utf-8") as fh:
+                events = [json.loads(line)["event"] for line in fh if line.strip()]
+            self.assertIn("run_start", events)
+            self.assertIn("run_end", events)
+
+    def test_optimized_rlm_backs_off_after_prompt_limit_error(self):
+        llm = TokenLimitLLM()
+        config = OptimizedRLMConfig(
+            leaf_chunk_words=4,
+            min_leaf_chunk_words=2,
+            chunk_overlap_words=0,
+            max_llm_calls=20,
+        )
+        doc = Document(name="doc", content="one two three four")
+
+        result = OptimizedRLMSystem(llm=llm, config=config).run(doc, "Summarize")
+
+        self.assertTrue(result.succeeded)
+        self.assertEqual(result.answer, "Backoff synthesis.")
+
+    def test_lookup_question_uses_focused_excerpts(self):
+        llm = TextOnlyLLM()
+        config = OptimizedRLMConfig(leaf_chunk_words=100, max_llm_calls=10)
+        system = OptimizedRLMSystem(llm=llm, config=config)
+        doc = Document(
+            name="doc",
+            content=(
+                "Alpha beta gamma. Dr. Sagarika Dash can be contacted at "
+                "sagarika.dash@example.com for parliamentary matters. "
+                "Additional unrelated text follows."
+            ),
+        )
+
+        selected = system._select_leaf_content(doc, "What is the E-mail of Dr. Sagarika Dash?")
+
+        self.assertIn("EXCERPT 1", selected)
+        self.assertIn("sagarika.dash@example.com", selected)
 
 
 if __name__ == "__main__":

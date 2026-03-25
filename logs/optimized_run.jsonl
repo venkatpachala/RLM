@@ -1,0 +1,74 @@
+{"event": "run_start", "document": "document.pdf", "words": 65072, "question": "Summarize the main points"}
+{"event": "node_start", "depth": 0, "document": "document.pdf", "words": 65072}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 0-3000]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 0-3000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 0-3000]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 2850-5850]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 2850-5850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 2850-5850]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 5700-8700]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 5700-8700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 5700-8700]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 8550-11550]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 8550-11550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 8550-11550]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 11400-14400]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 11400-14400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 11400-14400]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 14250-17250]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 14250-17250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 14250-17250]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 17100-20100]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 17100-20100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 17100-20100]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 19950-22950]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 19950-22950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 19950-22950]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 22800-25800]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 22800-25800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 22800-25800]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 25650-28650]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 25650-28650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 25650-28650]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 28500-31500]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 28500-31500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 28500-31500]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 31350-34350]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 31350-34350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 31350-34350]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 34200-37200]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 34200-37200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 34200-37200]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 37050-40050]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 37050-40050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 37050-40050]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 39900-42900]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 39900-42900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 39900-42900]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 42750-45750]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 42750-45750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 42750-45750]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 45600-48600]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 45600-48600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 45600-48600]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 48450-51450]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 48450-51450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 48450-51450]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 51300-54300]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 51300-54300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 51300-54300]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 54150-57150]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 54150-57150]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 54150-57150]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 57000-60000]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 57000-60000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 57000-60000]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 59850-62850]", "words": 3000}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 59850-62850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 59850-62850]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 62700-65072]", "words": 2372}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 62700-65072]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 62700-65072]", "answer_preview": "Mock answer for: Summarize the main points"}
+{"event": "synthesis_llm_call", "depth": 0, "document": "document.pdf", "count": 23}
+{"event": "node_end", "depth": 0, "document": "document.pdf", "answer_preview": "Unified summary based on chunk-level answers."}
+{"event": "run_end", "succeeded": true, "llm_calls": 24, "elapsed_sec": 0.15837335586547852}

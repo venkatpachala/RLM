@@ -51,6 +51,10 @@ class BaseLanguageModel(ABC):
     def generate(self, prompt: str) -> str:
         """Send *prompt* to the LLM and return the raw response string."""
 
+    @abstractmethod
+    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """Send a normal text-generation prompt and return the response string."""
+
     def _record_call(self, prompt: str, response: str) -> None:
         self.call_count += 1
         self._total_prompt_words += len(prompt.split())
@@ -113,7 +117,17 @@ Example (document does NOT fit, split into 4):
   chunks = split(P, 4)
   results = [sub_call(c, Q) for c in chunks]
   combined = merge(results)
-  final(combined)
+final(combined)
+"""
+
+TEXT_SYSTEM_PROMPT = """\
+You are a precise document-analysis assistant.
+
+Rules:
+1. Answer in normal text, not code.
+2. Be concise, factual, and non-redundant.
+3. If asked to synthesize chunk summaries, merge them into one coherent answer.
+4. Do not mention missing context unless it is genuinely necessary.
 """
 
 
@@ -221,6 +235,68 @@ class OpenRouterLLM(BaseLanguageModel):
             "OpenRouter API call failed after retries: {}".format(last_error)
         )
 
+    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """Send a standard text prompt to OpenRouter and return plain text."""
+        if self.verbose:
+            print("  [LLM #{} -> {} | text]".format(self.call_count + 1, self.model))
+
+        headers = {
+            "Authorization": "Bearer {}".format(self.api_key),
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/rlm-project/rlm_v0",
+            "X-Title": "RLM Document Processor",
+        }
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt or TEXT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 1024,
+        }
+
+        last_error: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                resp = _requests.post(
+                    self.API_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=60,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                response_text = data["choices"][0]["message"]["content"].strip()
+                self._record_call(prompt, response_text)
+                return response_text
+            except _requests.exceptions.Timeout:
+                last_error = TimeoutError("OpenRouter API timed out (60s)")
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+            except _requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response else "?"
+                try:
+                    body = e.response.json()
+                    msg = body.get("error", {}).get("message", str(e))
+                except Exception:
+                    msg = str(e)
+                last_error = RuntimeError(
+                    "OpenRouter HTTP {} error: {}".format(status, msg)
+                )
+                if status in (429, 500, 502, 503) and attempt < 2:
+                    time.sleep(2 ** attempt)
+                else:
+                    break
+            except Exception as e:
+                last_error = e
+                break
+
+        raise RuntimeError(
+            "OpenRouter text call failed after retries: {}".format(last_error)
+        )
+
 
 # ---------------------------------------------------------------------------
 # MockLLM — for offline testing
@@ -261,6 +337,12 @@ class MockLLM(BaseLanguageModel):
             print("  [MockLLM #{}] Generated {} words of code".format(
                 self.call_count + 1, len(response.split())
             ))
+        self._record_call(prompt, response)
+        return response
+
+    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """Return a deterministic text answer for testing the optimized mode."""
+        response = self._build_text_response(prompt)
         self._record_call(prompt, response)
         return response
 
@@ -331,3 +413,12 @@ class MockLLM(BaseLanguageModel):
             return 2
         k = (word_count + self.context_window - 1) // self.context_window
         return max(2, min(k, 20))
+
+    def _build_text_response(self, prompt: str) -> str:
+        if "Synthesize the following chunk summaries" in prompt:
+            return "Unified summary based on chunk-level answers."
+        for line in prompt.splitlines():
+            if line.startswith("QUESTION:"):
+                question = line.split(":", 1)[1].strip()
+                return "Mock answer for: {}".format(question)
+        return "Mock answer."

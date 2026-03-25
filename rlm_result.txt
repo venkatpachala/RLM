@@ -1,0 +1,13 @@
+============================================================
+RLM Result
+============================================================
+Document : document.pdf
+Question : What is the E-mail of Dr. Sagarika Dash
+LLM calls: 101
+Time     : 0.8s
+Success  : True
+
+Answer:
+------------------------------------------------------------
+Unified summary based on chunk-level answers.
+------------------------------------------------------------

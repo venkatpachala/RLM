@@ -45,6 +45,18 @@ def main():
     parser.add_argument("--question", type=str, default="", help="Question to ask")
     parser.add_argument("--mock",     action="store_true",  help="Use mock LLM (no API needed)")
     parser.add_argument("--folder",   type=str, default="", help="Document folder path")
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="optimized",
+        choices=("optimized", "repl"),
+        help="Execution mode: deterministic optimized RLM or REPL-driven RLM",
+    )
+    parser.add_argument("--log", type=str, default="", help="Optional JSONL trajectory log path")
+    parser.add_argument("--max-llm-calls", type=int, default=100, help="LLM call budget for optimized mode")
+    parser.add_argument("--max-seconds", type=float, default=600.0, help="Time budget for optimized mode")
+    parser.add_argument("--leaf-chunk-words", type=int, default=800, help="Target leaf chunk size for optimized mode")
+    parser.add_argument("--min-leaf-chunk-words", type=int, default=200, help="Minimum leaf chunk size after adaptive backoff")
     args = parser.parse_args()
 
     # Resolve folder: use arg if given, else default to <script_dir>/document_pdf
@@ -161,6 +173,11 @@ def main():
     # ── Step 6: Run RLM ──────────────────────────────────────────────────────
     print("[Step 4/4] Running RLM...")
     print()
+    print("  Mode:")
+    if args.mode == "optimized":
+        print("  - Optimized deterministic recursion with LLM summarization/synthesis")
+    else:
+        print("  - REPL-driven recursive code generation")
     print("  What will happen:")
     if document.fits_in_window(CONTEXT_WINDOW_WORDS):
         print("  - Document fits in one window -> single LLM call")
@@ -173,8 +190,22 @@ def main():
     print()
 
     try:
-        from core.rlm_system import RLMSystem
-        rlm = RLMSystem(llm=llm, max_depth=6, max_turns_per_node=5, verbose=True)
+        if args.mode == "optimized":
+            from core.optimized_rlm import OptimizedRLMConfig, OptimizedRLMSystem
+            config = OptimizedRLMConfig(
+                max_depth=6,
+                leaf_chunk_words=min(args.leaf_chunk_words, CONTEXT_WINDOW_WORDS),
+                min_leaf_chunk_words=max(50, min(args.min_leaf_chunk_words, args.leaf_chunk_words)),
+                chunk_overlap_words=150,
+                max_llm_calls=args.max_llm_calls,
+                max_elapsed_sec=args.max_seconds,
+                enable_final_synthesis=True,
+                log_path=args.log or None,
+            )
+            rlm = OptimizedRLMSystem(llm=llm, config=config, verbose=True)
+        else:
+            from core.rlm_system import RLMSystem
+            rlm = RLMSystem(llm=llm, max_depth=6, max_turns_per_node=5, verbose=True)
         result = rlm.run(document, question)
     except KeyboardInterrupt:
         print("\n\nInterrupted by user.")

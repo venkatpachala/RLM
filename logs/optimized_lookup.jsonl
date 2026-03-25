@@ -1,0 +1,305 @@
+{"event": "run_start", "document": "document.pdf", "words": 65072, "question": "What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 0, "document": "document.pdf", "words": 65072}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 0-800]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 0-800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 0-800]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 650-1450]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 650-1450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 650-1450]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 1300-2100]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 1300-2100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 1300-2100]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 1950-2750]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 1950-2750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 1950-2750]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 2600-3400]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 2600-3400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 2600-3400]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 3250-4050]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 3250-4050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 3250-4050]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 3900-4700]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 3900-4700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 3900-4700]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 4550-5350]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 4550-5350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 4550-5350]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 5200-6000]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 5200-6000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 5200-6000]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 5850-6650]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 5850-6650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 5850-6650]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 6500-7300]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 6500-7300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 6500-7300]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 7150-7950]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 7150-7950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 7150-7950]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 7800-8600]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 7800-8600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 7800-8600]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 8450-9250]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 8450-9250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 8450-9250]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 9100-9900]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 9100-9900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 9100-9900]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 9750-10550]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 9750-10550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 9750-10550]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 10400-11200]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 10400-11200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 10400-11200]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 11050-11850]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 11050-11850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 11050-11850]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 11700-12500]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 11700-12500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 11700-12500]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 12350-13150]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 12350-13150]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 12350-13150]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 13000-13800]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 13000-13800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 13000-13800]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 13650-14450]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 13650-14450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 13650-14450]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 14300-15100]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 14300-15100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 14300-15100]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 14950-15750]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 14950-15750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 14950-15750]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 15600-16400]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 15600-16400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 15600-16400]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 16250-17050]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 16250-17050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 16250-17050]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 16900-17700]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 16900-17700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 16900-17700]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 17550-18350]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 17550-18350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 17550-18350]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 18200-19000]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 18200-19000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 18200-19000]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 18850-19650]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 18850-19650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 18850-19650]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 19500-20300]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 19500-20300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 19500-20300]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 20150-20950]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 20150-20950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 20150-20950]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 20800-21600]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 20800-21600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 20800-21600]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 21450-22250]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 21450-22250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 21450-22250]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 22100-22900]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 22100-22900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 22100-22900]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 22750-23550]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 22750-23550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 22750-23550]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 23400-24200]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 23400-24200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 23400-24200]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 24050-24850]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 24050-24850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 24050-24850]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 24700-25500]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 24700-25500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 24700-25500]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 25350-26150]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 25350-26150]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 25350-26150]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 26000-26800]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 26000-26800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 26000-26800]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 26650-27450]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 26650-27450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 26650-27450]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 27300-28100]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 27300-28100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 27300-28100]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 27950-28750]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 27950-28750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 27950-28750]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 28600-29400]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 28600-29400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 28600-29400]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 29250-30050]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 29250-30050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 29250-30050]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 29900-30700]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 29900-30700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 29900-30700]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 30550-31350]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 30550-31350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 30550-31350]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 31200-32000]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 31200-32000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 31200-32000]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 31850-32650]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 31850-32650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 31850-32650]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 32500-33300]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 32500-33300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 32500-33300]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 33150-33950]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 33150-33950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 33150-33950]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 33800-34600]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 33800-34600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 33800-34600]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 34450-35250]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 34450-35250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 34450-35250]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 35100-35900]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 35100-35900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 35100-35900]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 35750-36550]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 35750-36550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 35750-36550]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 36400-37200]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 36400-37200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 36400-37200]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 37050-37850]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 37050-37850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 37050-37850]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 37700-38500]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 37700-38500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 37700-38500]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 38350-39150]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 38350-39150]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 38350-39150]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 39000-39800]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 39000-39800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 39000-39800]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 39650-40450]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 39650-40450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 39650-40450]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 40300-41100]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 40300-41100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 40300-41100]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 40950-41750]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 40950-41750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 40950-41750]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 41600-42400]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 41600-42400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 41600-42400]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 42250-43050]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 42250-43050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 42250-43050]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 42900-43700]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 42900-43700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 42900-43700]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 43550-44350]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 43550-44350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 43550-44350]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 44200-45000]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 44200-45000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 44200-45000]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 44850-45650]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 44850-45650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 44850-45650]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 45500-46300]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 45500-46300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 45500-46300]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 46150-46950]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 46150-46950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 46150-46950]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 46800-47600]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 46800-47600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 46800-47600]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 47450-48250]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 47450-48250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 47450-48250]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 48100-48900]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 48100-48900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 48100-48900]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 48750-49550]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 48750-49550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 48750-49550]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 49400-50200]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 49400-50200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 49400-50200]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 50050-50850]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 50050-50850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 50050-50850]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 50700-51500]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 50700-51500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 50700-51500]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 51350-52150]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 51350-52150]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 51350-52150]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 52000-52800]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 52000-52800]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 52000-52800]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 52650-53450]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 52650-53450]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 52650-53450]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 53300-54100]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 53300-54100]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 53300-54100]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 53950-54750]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 53950-54750]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 53950-54750]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 54600-55400]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 54600-55400]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 54600-55400]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 55250-56050]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 55250-56050]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 55250-56050]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 55900-56700]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 55900-56700]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 55900-56700]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 56550-57350]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 56550-57350]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 56550-57350]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 57200-58000]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 57200-58000]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 57200-58000]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 57850-58650]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 57850-58650]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 57850-58650]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 58500-59300]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 58500-59300]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 58500-59300]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 59150-59950]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 59150-59950]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 59150-59950]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 59800-60600]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 59800-60600]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 59800-60600]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 60450-61250]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 60450-61250]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 60450-61250]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 61100-61900]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 61100-61900]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 61100-61900]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 61750-62550]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 61750-62550]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 61750-62550]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 62400-63200]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 62400-63200]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 62400-63200]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 63050-63850]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 63050-63850]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 63050-63850]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 63700-64500]", "words": 800}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 63700-64500]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 63700-64500]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "node_start", "depth": 1, "document": "document.pdf [words 64350-65072]", "words": 722}
+{"event": "leaf_llm_call", "depth": 1, "document": "document.pdf [words 64350-65072]"}
+{"event": "node_end", "depth": 1, "document": "document.pdf [words 64350-65072]", "answer_preview": "Mock answer for: What is the E-mail of Dr. Sagarika Dash"}
+{"event": "synthesis_llm_call", "depth": 0, "document": "document.pdf", "count": 100}
+{"event": "node_end", "depth": 0, "document": "document.pdf", "answer_preview": "Unified summary based on chunk-level answers."}
+{"event": "run_end", "succeeded": true, "llm_calls": 101, "elapsed_sec": 0.7719330787658691}
