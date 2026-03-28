@@ -1,248 +1,150 @@
 """
-core/document.py - Layer 1: Data Model
-=======================================
-
-The Document class is the "filing cabinet" for the RLM system.
-It stores the full text OUTSIDE the LLM's attention mechanism.
-The LLM only ever receives a short preview and word count — never
-the full text directly. It reads chunks by calling split() and
-sub_call() through the REPL.
-
-Supports loading from:
-  - PDF files  (via PyMuPDF / fitz)
-  - Plain .txt files (utf-8)
-
-Public API (also available as free functions in the REPL namespace):
-  - doc.word_count       -> int   (approximates token count)
-  - len(doc)             -> int   (same as word_count)
-  - doc.fits_in_window(K)-> bool
-  - doc.peek(start, end) -> str   (words[start:end] joined)
-  - doc.slice(start, end)-> Document
-  - doc.split(k)         -> list[Document]  (k equal chunks)
-  - doc.preview(n)       -> str   (first n words + '...')
+Document loading and slicing utilities for RLM.
 """
 
-from __future__ import annotations
+from dataclasses import dataclass
+from typing import Optional
+from pathlib import Path
 
-import os
-import glob
-from dataclasses import dataclass, field
-from typing import List, Optional
+def extract_text_from_pdf(pdf_path: str)-> str:
+    """Extract all text from a PDF using PyMuPDF (fitz)."""
+    try:
+        import fitz
+        doc=fitz.open(pdf_path)
+        pages=[]
+        for page in doc:
+            pages.append(page.get_text())
+        doc.close()
+        return "\n".join(pages)
+    except ImportError:
+        raise ImportError("Run: pip install pymupdf")
+    except Exception as e:
+        raise RuntimeError(f"Failed to read PDF '{pdf_path}:{e}")
+    
+def load_document_from_folder(folder: str ="document_pdf")-> "Document":
+    """
+    Scan the document_pdf/folder and load the first supported file found.
+    """
 
+    folder_path=Path(folder)
+    if not folder_path.exists():
+        folder_path.mkdir(parents=True)
+        raise FileNotFoundError(
+            f"folder '{folder}' was empty or missing."
+        )
+    supported=[".pdf",".txt",".md"]
+    found_files=[
+        f for f in folder_path.iterdir()
+        if f.is_file() and f.suffix.lower() in supported
+    ]
 
-# ---------------------------------------------------------------------------
-# Document dataclass
-# ---------------------------------------------------------------------------
-
+    if not found_files:
+        raise FileNotFoundError(
+            f"No supported files in '{folder}/'."
+        )
+    
+    found_files.sort()
+    chosen = found_files[0]
+    print(f"[Loader] Found: {chosen.name}")
+ 
+    if chosen.suffix.lower() == ".pdf":
+        content = extract_text_from_pdf(str(chosen))
+    else:
+        content = chosen.read_text(encoding="utf-8", errors="replace")
+ 
+    content = " ".join(content.split())
+ 
+    print(f"[Loader] Loaded {len(content.split()):,} words from '{chosen.name}'")
+    return Document(content=content, name=chosen.name)   
+    
 @dataclass
 class Document:
-    """A chunk of text kept outside the LLM's context window."""
+    """
+    Stores the full document text externally - NOT in the LLM's context window
+    """
 
-    name: str
-    content: str
-    parent_name: Optional[str] = None
-    depth: int = 0
-
-    # Cached word list — computed once on first access
-    _words: List[str] = field(default_factory=list, init=False, repr=False, compare=False)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _get_words(self) -> List[str]:
-        """Return (and cache) the list of whitespace-split words."""
-        if not self._words:
-            self._words = self.content.split()
-        return self._words
-
-    # ------------------------------------------------------------------
-    # Core properties
-    # ------------------------------------------------------------------
+    content:str
+    name: str="document"
+    parent_name: Optional[str]=None
+    depth: int=0
 
     @property
-    def word_count(self) -> int:
-        """Number of whitespace-delimited words — used as token proxy."""
-        return len(self._get_words())
+    def word_count(self)->int:
+        """
+        Approximate token count
+        Use tiktoken.encode() for exact counts.
+        """
 
-    def __len__(self) -> int:
+        return len(self.content.split())
+    
+    def __len__(self)->int:
         return self.word_count
-
-    def fits_in_window(self, window_size: int) -> bool:
-        """Return True when this document can be sent to the LLM in one shot."""
-        return self.word_count <= window_size
-
-    # ------------------------------------------------------------------
-    # Reading operations (used by REPL namespace)
-    # ------------------------------------------------------------------
-
-    def peek(self, start: int, end: int) -> str:
+    
+    def fits_in_window(self, context_window: int) -> bool:
         """
-        Return words[start:end] as a single space-joined string.
-        Safe: clamps indices to valid range.
+        True if the chunk fits within the configured context window.
         """
-        words = self._get_words()
-        start = max(0, start)
-        end = min(len(words), end)
+        return self.word_count <= context_window
+
+    def fits_int_windows(self, context_window: int) -> bool:
+        """
+        Backward-compatible alias for the old misspelled method name.
+        """
+        return self.fits_in_window(context_window)
+    
+    def peek(self,start: int=0, end: int=100)->str:
+        """
+        Read a slice of text by word index.
+        Used by LLm to inspect a chunk before deciding to process it.
+        
+        In RLM: the llm generates 'peek(p,0,200) in its code
+        """
+
+        words=self.content.split()
         return " ".join(words[start:end])
+    
+    def split(self,k:int)->list["Document"]:
+        """
+        Split into k equal chunks. Always deterministic same k -> same chunks
+        In RLM: the LLM decided k
+        """
 
-    def preview(self, n: int = 150) -> str:
-        """First *n* words of content, followed by '...' if truncated."""
-        words = self._get_words()
-        snippet = " ".join(words[:n])
-        return snippet + ("..." if len(words) > n else "")
-
-    # ------------------------------------------------------------------
-    # Slicing / splitting (the core RLM operation)
-    # ------------------------------------------------------------------
+        if k<1:
+            raise ValueError(f"split(k): k must be >=1. got {k}")
+        if k==1:
+            return[self]
+        
+        words = self.content.split()
+        chunk_size = max(1, len(words) // k)
+        chunks = []
+        for i in range(k):
+            start = i * chunk_size
+            end = start + chunk_size if i < k - 1 else len(words)
+            chunks.append(Document(
+                content=" ".join(words[start:end]),
+                name=f"{self.name}[chunk {i+1}/{k}]",
+                parent_name=self.name,
+                depth=self.depth + 1,
+            ))
+        return chunks
 
     def slice(self, start: int, end: int) -> "Document":
         """
-        Create a child Document from word indices [start, end).
-        The child's name encodes its position for traceability.
+        Return a sub-document using word offsets.
         """
-        words = self._get_words()
+        words = self.content.split()
         start = max(0, start)
         end = min(len(words), end)
-        child_content = " ".join(words[start:end])
-        child_name = "{} [words {}-{}]".format(self.name, start, end)
         return Document(
-            name=child_name,
-            content=child_content,
+            content=" ".join(words[start:end]),
+            name=f"{self.name}[words {start}:{end}]",
             parent_name=self.name,
             depth=self.depth + 1,
         )
-
-    def split(self, k: int) -> List["Document"]:
-        """
-        Split this document into *k* roughly-equal chunks.
-
-        Raises:
-            ValueError: if k < 1
-        """
-        if k < 1:
-            raise ValueError(
-                "split(k) requires k >= 1, got k={}".format(k)
-            )
-        words = self._get_words()
-        total = len(words)
-        if total == 0:
-            return [Document(name=self.name + " [empty]", content="", parent_name=self.name)]
-
-        # Ensure we don't request more chunks than words
-        k = min(k, total)
-
-        chunk_size = (total + k - 1) // k  # ceiling division
-        chunks = []
-        for i in range(k):
-            s = i * chunk_size
-            e = min(s + chunk_size, total)
-            if s >= total:
-                break
-            chunks.append(self.slice(s, e))
-        return chunks
-
-    # ------------------------------------------------------------------
-    # String representation
-    # ------------------------------------------------------------------
-
-    def __repr__(self) -> str:
-        return "Document(name={!r}, words={}, depth={})".format(
-            self.name, self.word_count, self.depth
-        )
-
-
-# ---------------------------------------------------------------------------
-# Loader — reads PDF or TXT from a folder
-# ---------------------------------------------------------------------------
-
-def load_document_from_folder(folder_path: str) -> Document:
-    """
-    Load the first PDF or .txt file found in *folder_path*.
-
-    PDF extraction uses PyMuPDF (fitz). Raises FileNotFoundError if
-    no supported file is found, ImportError if fitz is missing for PDF.
-
-    Args:
-        folder_path: Path to the folder containing the document.
-
-    Returns:
-        A Document instance with the full extracted text.
-
-    Raises:
-        FileNotFoundError: No PDF or .txt file found.
-        ImportError: PyMuPDF not installed (PDF only).
-        RuntimeError: PDF extracted no text (scanned / image PDF).
-    """
-    folder_path = os.path.abspath(folder_path)
-
-    if not os.path.isdir(folder_path):
-        raise FileNotFoundError(
-            "Folder not found: '{}'. Create it and drop a PDF or .txt file inside.".format(
-                folder_path
-            )
-        )
-
-    # Collect candidates in priority order: PDF first, then TXT
-    pdf_files = sorted(glob.glob(os.path.join(folder_path, "*.pdf")))
-    txt_files = sorted(glob.glob(os.path.join(folder_path, "*.txt")))
-    candidates = pdf_files + txt_files
-
-    if not candidates:
-        raise FileNotFoundError(
-            "No .pdf or .txt files found in '{}'. Drop a document file there.".format(
-                folder_path
-            )
-        )
-
-    file_path = candidates[0]
-    ext = os.path.splitext(file_path)[1].lower()
-    base_name = os.path.basename(file_path)
-
-    if ext == ".pdf":
-        content = _extract_pdf_text(file_path)
-    else:
-        content = _extract_txt_text(file_path)
-
-    if not content.strip():
-        raise RuntimeError(
-            "Extracted no text from '{}'. "
-            "The file may be empty, scanned, or image-only.".format(base_name)
-        )
-
-    return Document(name=base_name, content=content)
-
-
-def _extract_pdf_text(file_path: str) -> str:
-    """Extract all text from a PDF using PyMuPDF."""
-    try:
-        import fitz  # PyMuPDF
-    except ImportError:
-        raise ImportError(
-            "PyMuPDF is required to read PDF files.\n"
-            "Install it with:  pip install pymupdf"
-        )
-
-    pages = []
-    with fitz.open(file_path) as doc:
-        for page in doc:
-            text = page.get_text("text")
-            if text.strip():
-                pages.append(text)
-
-    return "\n".join(pages)
-
-
-def _extract_txt_text(file_path: str) -> str:
-    """Read a plain text file (UTF-8 with BOM fallback)."""
-    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
-        try:
-            with open(file_path, "r", encoding=encoding) as f:
-                return f.read()
-        except UnicodeDecodeError:
-            continue
-    raise RuntimeError(
-        "Could not decode '{}' with utf-8 or latin-1.".format(
-            os.path.basename(file_path)
-        )
-    )
+ 
+    def preview(self, n: int = 60) -> str:
+        p = self.peek(0, n)
+        return p + ("..." if self.word_count > n else "")
+ 
+    def __repr__(self):
+        return f"Document('{self.name}', {self.word_count} words)"

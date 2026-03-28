@@ -1,323 +1,27 @@
-"""
-core/repl.py - Layer 3: The REPL Engine
-=========================================
-
-The REPL (Read-Eval-Print Loop) is the "open-ended loop" that lets the LLM
-issue Python commands to process a document chunk by chunk without ever
-reading the whole document at once.
-
-Flow per turn:
-  1. Build prompt  -- doc preview + word count + fits flag + question + history
-  2. Call LLM      -- get Python code string
-  3. safe_exec()   -- run code in REPLNamespace (restricted scope)
-  4. Append history-- LLM sees any errors next turn and can self-correct
-  5. Check final() -- if namespace._is_done: return answer
-
-Key classes:
-  REPLNamespace   -- The controlled exec() scope.  Exposes only the five
-                     RLM functions (split, peek, sub_call, merge, final)
-                     plus safe builtins.  Everything else is blocked.
-
-  REPLExecutor    -- Runs the REPL loop for one Document node.
-                     Created fresh for every _call() in RLMSystem.
-
-  REPLResult      -- Lightweight result datatype returned from REPLExecutor.run().
-"""
-
-from __future__ import annotations
-
-import ast
-import json
-import re
-import sys
-import time
-import traceback
-from dataclasses import dataclass
-from typing import Callable, List, Optional
-
-from core.document import Document
-from core.parser import extract_final_literal
-from core.prompts import build_repl_task_suffix
 
 
-# ---------------------------------------------------------------------------
-# Safe builtins available to LLM-generated code
-# ---------------------------------------------------------------------------
+from dataclasses import dataclass, field
+from typing import Callable, Optional
 
-def _blocked_import(*args, **kwargs):
-    raise RuntimeError(
-        "import is not allowed in RLM code blocks. "
-        "Use only the pre-defined functions: split, peek, sub_call, merge, final."
-    )
+from .document import Document
 
 
-_SAFE_BUILTINS: dict = {
-    "__builtins__": {
-        # Introspection
-        "len":      len,
-        "range":    range,
-        "enumerate":enumerate,
-        "zip":      zip,
-        "map":      map,
-        "filter":   filter,
-        # Type constructors
-        "str":      str,
-        "int":      int,
-        "float":    float,
-        "bool":     bool,
-        "list":     list,
-        "dict":     dict,
-        "tuple":    tuple,
-        "set":      set,
-        # Utilities
-        "print":    print,
-        "repr":     repr,
-        "isinstance": isinstance,
-        "type":     type,
-        "min":      min,
-        "max":      max,
-        "sum":      sum,
-        "abs":      abs,
-        "round":    round,
-        "sorted":   sorted,
-        "reversed": reversed,
-        "any":      any,
-        "all":      all,
-        # Disallowed but must exist to suppress NameErrors on common accidents
-        # (they raise a clear error message instead)
-        "__import__": _blocked_import,
-    }
-}
-
-_ALLOWED_CALL_NAMES = {
-    "split",
-    "peek",
-    "sub_call",
-    "merge",
-    "final",
-    "FINAL",
-    "FINAL_VAR",
-    "find_all",
-    "count_matches",
-    "regex_search",
-    "parse_json",
-    "to_json",
-    "len",
-    "range",
-    "enumerate",
-    "zip",
-    "map",
-    "filter",
-    "str",
-    "int",
-    "float",
-    "bool",
-    "list",
-    "dict",
-    "tuple",
-    "set",
-    "print",
-    "repr",
-    "isinstance",
-    "type",
-    "min",
-    "max",
-    "sum",
-    "abs",
-    "round",
-    "sorted",
-    "reversed",
-    "any",
-    "all",
-}
-
-_ALLOWED_AST_NODES = (
-    ast.Module,
-    ast.Assign,
-    ast.AugAssign,
-    ast.Expr,
-    ast.Name,
-    ast.Load,
-    ast.Store,
-    ast.Constant,
-    ast.Call,
-    ast.List,
-    ast.Tuple,
-    ast.Dict,
-    ast.Set,
-    ast.ListComp,
-    ast.comprehension,
-    ast.For,
-    ast.If,
-    ast.Compare,
-    ast.Eq,
-    ast.NotEq,
-    ast.Lt,
-    ast.LtE,
-    ast.Gt,
-    ast.GtE,
-    ast.In,
-    ast.NotIn,
-    ast.Is,
-    ast.IsNot,
-    ast.BoolOp,
-    ast.And,
-    ast.Or,
-    ast.UnaryOp,
-    ast.Not,
-    ast.USub,
-    ast.BinOp,
-    ast.Add,
-    ast.Sub,
-    ast.Mult,
-    ast.Div,
-    ast.FloorDiv,
-    ast.Mod,
-    ast.Subscript,
-    ast.Slice,
-    ast.keyword,
-    ast.Pass,
-)
-
-
-class UnsafeCodeError(RuntimeError):
-    """Raised when LLM-generated code uses syntax outside the safe subset."""
-
-
-class _SafeCodeValidator(ast.NodeVisitor):
-    """Allow only the small Python subset needed for chunk orchestration."""
-
-    def generic_visit(self, node):
-        if not isinstance(node, _ALLOWED_AST_NODES):
-            raise UnsafeCodeError(
-                "Disallowed syntax: {}".format(type(node).__name__)
-            )
-        super().generic_visit(node)
-
-    def visit_Attribute(self, node):
-        if self._is_safe_method_attribute(node):
-            self.visit(node.value)
-            return
-        raise UnsafeCodeError("Attribute access is not allowed.")
-
-    def visit_Import(self, node):
-        raise UnsafeCodeError("import is not allowed.")
-
-    def visit_ImportFrom(self, node):
-        raise UnsafeCodeError("import is not allowed.")
-
-    def visit_While(self, node):
-        raise UnsafeCodeError("while loops are not allowed.")
-
-    def visit_Try(self, node):
-        raise UnsafeCodeError("try/except is not allowed.")
-
-    def visit_FunctionDef(self, node):
-        raise UnsafeCodeError("Function definitions are not allowed.")
-
-    def visit_AsyncFunctionDef(self, node):
-        raise UnsafeCodeError("Function definitions are not allowed.")
-
-    def visit_ClassDef(self, node):
-        raise UnsafeCodeError("Class definitions are not allowed.")
-
-    def visit_Lambda(self, node):
-        raise UnsafeCodeError("lambda is not allowed.")
-
-    def visit_Delete(self, node):
-        raise UnsafeCodeError("delete is not allowed.")
-
-    def visit_Global(self, node):
-        raise UnsafeCodeError("global is not allowed.")
-
-    def visit_Nonlocal(self, node):
-        raise UnsafeCodeError("nonlocal is not allowed.")
-
-    def visit_Call(self, node):
-        if isinstance(node.func, ast.Name):
-            if node.func.id not in _ALLOWED_CALL_NAMES:
-                raise UnsafeCodeError(
-                    "Call to '{}' is not allowed.".format(node.func.id)
-                )
-        elif isinstance(node.func, ast.Attribute):
-            if not self._is_safe_method_attribute(node.func):
-                raise UnsafeCodeError("Only approved method calls are allowed.")
-            self.visit(node.func.value)
-        else:
-            raise UnsafeCodeError("Only approved function calls are allowed.")
-        self.generic_visit(node)
-
-    def visit_Name(self, node):
-        if node.id.startswith("__"):
-            raise UnsafeCodeError("Dunder names are not allowed.")
-        self.generic_visit(node)
-
-    def visit_Assign(self, node):
-        for target in node.targets:
-            self._validate_assignment_target(target)
-        self.visit(node.value)
-
-    def visit_AugAssign(self, node):
-        self._validate_assignment_target(node.target)
-        if not isinstance(node.op, ast.Add):
-            raise UnsafeCodeError("Only += is allowed for augmented assignment.")
-        self.visit(node.value)
-
-    def visit_For(self, node):
-        self._validate_assignment_target(node.target)
-        self.visit(node.iter)
-        for stmt in node.body:
-            self.visit(stmt)
-        for stmt in node.orelse:
-            self.visit(stmt)
-
-    def visit_comprehension(self, node):
-        self._validate_assignment_target(node.target)
-        self.visit(node.iter)
-        for clause in node.ifs:
-            self.visit(clause)
-
-    def _validate_assignment_target(self, node):
-        if isinstance(node, ast.Name):
-            if node.id.startswith("__"):
-                raise UnsafeCodeError("Dunder names are not allowed.")
-            return
-        if isinstance(node, (ast.Tuple, ast.List)):
-            for elt in node.elts:
-                self._validate_assignment_target(elt)
-            return
-        raise UnsafeCodeError(
-            "Invalid assignment target: {}".format(type(node).__name__)
-        )
-
-    @staticmethod
-    def _is_safe_method_attribute(node):
-        return (
-            isinstance(node, ast.Attribute)
-            and isinstance(node.value, ast.Name)
-            and node.attr in {"append", "extend"}
-            and not node.value.id.startswith("__")
-        )
-
-
-# ---------------------------------------------------------------------------
-# REPLNamespace — execution scope for LLM code
-# ---------------------------------------------------------------------------
 
 class REPLNamespace:
     """
-    Provides the five RLM functions to exec()'d LLM code.
+    The 'global scope' that exec(generated_code) runs inside.
 
-    The two key variables injected as globals:
-      P  -- the current Document (the LLM refers to it as 'P')
-      Q  -- the question string (the LLM refers to it as 'Q')
+    When the LLM writes:
+        chunks = split(P, 4)
 
-    Functions exposed:
-      split(P, k)      -> list[Document]
-      peek(P, s, e)    -> str
-      sub_call(doc, q) -> str   (calls back into RLMSystem._call recursively)
-      merge(answers)   -> str
-      final(answer)    -> None  (sets _is_done=True)
+    Python resolves 'split' and 'P' from this namespace dict.
+    We control exactly what's available — nothing else.
+
+    Why this matters:
+      - Safety: LLM can't call os.system(), import random, etc.
+      - Observability: every sub_call() and final() is captured here
+      - Injectability: sub_call_handler is passed in from RLMSystem,
+        creating the recursive wiring
     """
 
     def __init__(
@@ -325,456 +29,191 @@ class REPLNamespace:
         document: Document,
         question: str,
         sub_call_handler: Callable[[Document, str], str],
+        max_k: int = 8,
     ):
-        self._document = document
-        self._question = question
-        self._sub_call_handler = sub_call_handler
-        self._is_done: bool = False
-        self._answer: str = ""
-        self._sub_call_count: int = 0
+        self.document = document
+        self.question = question
+        self._handler = sub_call_handler
+        self._max_k = max_k
 
-    # ------------------------------------------------------------------
-    # The five RLM primitives (called from exec()'d LLM code)
-    # ------------------------------------------------------------------
+        # Written by the LLM calling these functions
+        self._answer: Optional[str] = None
+        self._done: bool = False
 
-    def _fn_split(self, P: Document, k: int) -> List[Document]:
-        """Split document *P* into *k* equal chunks."""
-        if not isinstance(P, Document):
-            raise TypeError(
-                "split() first argument must be a Document, got {!r}".format(type(P).__name__)
-            )
-        if not isinstance(k, int) or k < 1:
-            raise ValueError(
-                "split(doc, k): k must be a positive integer, got {!r}".format(k)
-            )
-        return P.split(k)
 
-    def _fn_peek(self, P: Document, start: int, end: int) -> str:
-        """Read words[start:end] of *P* as a string."""
-        if not isinstance(P, Document):
-            raise TypeError(
-                "peek() first argument must be a Document, got {!r}".format(type(P).__name__)
-            )
-        return P.peek(start, end)
-
-    def _fn_sub_call(self, doc: Document, q: str) -> str:
-        """Recursively process *doc* with *q* via RLMSystem._call()."""
-        if not isinstance(doc, Document):
-            raise TypeError(
-                "sub_call() first argument must be a Document, got {!r}".format(type(doc).__name__)
-            )
-        self._sub_call_count += 1
-        return self._sub_call_handler(doc, str(q))
-
-    def _fn_merge(self, answers) -> str:
+    def split(self, doc: Document, k: int) -> list[Document]:
         """
-        Filter out blank/None answers, join the rest with newlines.
-        Always returns a string — never raises.
+        Split doc into k equal chunks.
+        The LLM decides k in RLM. λ-RLM always uses k*=2.
         """
-        if not hasattr(answers, "__iter__"):
-            raise TypeError(
-                "merge() expects an iterable of strings, got {!r}".format(type(answers).__name__)
-            )
-        parts = [str(a).strip() for a in answers if a and str(a).strip()]
-        return "\n\n".join(parts) if parts else "No relevant information found."
+        if k < 1:
+            raise ValueError(f"split(P, {k}): k must be ≥ 1")
+        k = min(k, self._max_k)
+        chunks = doc.split(k)
+        print(f"      [SPLIT] {doc.name} → {k} chunks (~{len(doc)//k} words each)")
+        return chunks
 
-    def _fn_final(self, answer) -> None:
-        """Store *answer* and signal the REPL loop to stop."""
-        self._answer = str(answer).strip()
-        self._is_done = True
+    def peek(self, doc: Document, start: int, end: int) -> str:
+        """Cheap inspection. Reads a slice without an LLM call."""
+        result = doc.peek(start, end)
+        print(f"      [PEEK] {doc.name}[{start}:{end}] = '{result[:50]}...'")
+        return result
 
-    def _fn_find_all(self, text, needle) -> list[int]:
-        """Return all start offsets where *needle* occurs in *text*."""
-        haystack = str(text)
-        target = str(needle)
-        if not target:
-            return []
-        out = []
-        start = 0
-        while True:
-            idx = haystack.find(target, start)
-            if idx < 0:
-                return out
-            out.append(idx)
-            start = idx + max(1, len(target))
-
-    def _fn_count_matches(self, text, needle) -> int:
-        """Count case-insensitive substring matches."""
-        haystack = str(text).lower()
-        target = str(needle).lower()
-        if not target:
-            return 0
-        return haystack.count(target)
-
-    def _fn_regex_search(self, pattern, text) -> list[str]:
-        """Return regex matches as strings."""
-        return [str(match) for match in re.findall(str(pattern), str(text))]
-
-    def _fn_parse_json(self, text):
-        """Parse a JSON string into Python primitives."""
-        return json.loads(str(text))
-
-    def _fn_to_json(self, obj) -> str:
-        """Serialize supported objects to JSON."""
-        return json.dumps(obj, ensure_ascii=True, sort_keys=True)
-
-    # ------------------------------------------------------------------
-    # Build the globals dict for exec()
-    # ------------------------------------------------------------------
-
-    def as_exec_dict(self) -> dict:
+    def sub_call(self, doc: Document, question: str) -> str:
         """
-        Return the complete globals dictionary to pass to exec().
-        Contains the five RLM functions, P, Q, and safe builtins.
+        Recursive invocation. Calls RLMSystem._call(doc, question, depth+1).
+        This is the heart of the recursion — injected via sub_call_handler.
+
+        ⚠ RLM failure mode: if doc is same size as parent → infinite recursion.
+        λ-RLM eliminates this: SPLIT always decreases size by factor k*=2.
         """
-        scope = dict(_SAFE_BUILTINS)  # starts with safe builtins
-        scope.update({
-            # Document and question
-            "P": self._document,
-            "Q": self._question,
-            # The five RLM functions
-            "split":    self._fn_split,
-            "peek":     self._fn_peek,
-            "sub_call": self._fn_sub_call,
-            "merge":    self._fn_merge,
-            "final":    self._fn_final,
-            "FINAL":    self._fn_final,
-            "FINAL_VAR": self._fn_final,
-            "find_all": self._fn_find_all,
-            "count_matches": self._fn_count_matches,
-            "regex_search": self._fn_regex_search,
-            "parse_json": self._fn_parse_json,
-            "to_json": self._fn_to_json,
-        })
-        return scope
+        print(f"      [SUB_CALL] → {doc.name} ({len(doc)} words)")
+        return self._handler(doc, question)
 
+    def merge(self, answers: list) -> str:
+        """
+        Combine partial answers. Filters empty/negative results.
+        In a smarter system this would be another LLM call.
+        """
+        if not answers:
+            return "No content found."
+        kept = []
+        for a in answers:
+            a_str = str(a).strip()
+            if a_str and len(a_str) > 5 and not a_str.lower().startswith("no relevant"):
+                kept.append(a_str)
+        if not kept:
+            return "No relevant findings in any section."
+        return "\n\n".join(kept)
 
-# ---------------------------------------------------------------------------
-# REPLResult — what REPLExecutor.run() returns
-# ---------------------------------------------------------------------------
+    def final(self, answer: str):
+        """
+        Signals the REPL loop to stop and return this answer.
+        ⚠ RLM failure mode: if LLM never calls this, loop runs until timeout.
+        λ-RLM eliminates this: Φ always terminates (Theorem 1).
+        """
+        self._answer = str(answer)
+        self._done = True
+        print(f"      [FINAL] '{str(answer)[:100]}...'")
+
+    def as_dict(self) -> dict:
+        """Build the namespace dict that exec() uses as its globals."""
+        return {
+            "P":        self.document,
+            "question": self.question,
+            "split":    self.split,
+            "peek":     self.peek,
+            "sub_call": self.sub_call,
+            "merge":    self.merge,
+            "final":    self.final,
+            "__builtins__": {
+                "len": len, "range": range, "list": list, "str": str,
+                "int": int, "float": float, "print": print,
+                "enumerate": enumerate, "zip": zip,
+                "max": max, "min": min, "True": True, "False": False, "None": None,
+            },
+        }
+
 
 @dataclass
 class REPLResult:
-    """Outcome of one REPLExecutor run (one document node)."""
     answer: str
+    turns: int
     succeeded: bool
-    turns_used: int
-    llm_calls: int
-    failure_reason: Optional[str] = None
+    failure: Optional[str] = None
 
-
-# ---------------------------------------------------------------------------
-# REPLExecutor — the main REPL loop
-# ---------------------------------------------------------------------------
 
 class REPLExecutor:
     """
-    Runs the REPL loop for a single Document node.
+    Runs one node of the RLM recursion tree.
 
-    Algorithm:
-        for turn in range(max_turns):
-            A. Build prompt  (preview + word count + fits flag + question + history)
-            B. LLM generates Python code
-            C. safe_exec(code) in REPLNamespace
-            D. Append (code, result_or_error) to history
-            E. If namespace._is_done -> return answer
+    For each turn:
+      1. Build prompt (doc preview + metadata + question + history)
+      2. Call LLM → get code
+      3. exec(code) in namespace
+      4. If final() was called → return answer
+      5. Else add turn to history, repeat
 
-        if max_turns exhausted -> return failure result
-
-    Args:
-        llm:       Any BaseLanguageModel instance.
-        max_turns: Max REPL iterations before giving up (default 5).
-        verbose:   Print per-turn debug info.
+    ⚠ No built-in termination guarantee — only the LLM calling final() stops it.
+    We add max_turns as a safety net.
     """
 
-    PREVIEW_WORDS = 150   # words shown to LLM as document preview
-    EXEC_TIMEOUT_SEC = 1.0
-
-    def __init__(
-        self,
-        llm,
-        max_turns: int = 5,
-        verbose: bool = False,
-    ):
+    def __init__(self, llm, max_turns: int = 6):
         self.llm = llm
         self.max_turns = max_turns
-        self.verbose = verbose
 
-    def run(
-        self,
-        document: Document,
-        question: str,
-        sub_call_handler: Callable[[Document, str], str],
-    ) -> REPLResult:
-        """
-        Execute the REPL loop for *document* / *question*.
+    def run(self, doc: Document, question: str,
+            ns: REPLNamespace, depth: int = 0) -> REPLResult:
 
-        Args:
-            document:          The Document chunk to process.
-            question:          The user's question.
-            sub_call_handler:  Callable(doc, q) -> str — provided by RLMSystem.
+        indent = "  " * depth
+        history: list[str] = []
 
-        Returns:
-            REPLResult with the answer (or failure info).
-        """
-        namespace = REPLNamespace(
-            document=document,
-            question=question,
-            sub_call_handler=sub_call_handler,
-        )
-        exec_globals = namespace.as_exec_dict()
+        print(f"\n{indent}{'─'*55}")
+        print(f"{indent}RLM Node  depth={depth}  doc='{doc.name}'  words={len(doc)}")
+        print(f"{indent}{'─'*55}")
 
-        history: List[str] = []
-        llm_calls_start = self.llm.call_count
+        for turn in range(self.max_turns):
+            prompt = self._prompt(doc, question, history)
 
-        for turn in range(1, self.max_turns + 1):
-            # A. Build prompt
-            prompt = self._build_prompt(
-                document=document,
-                question=question,
-                history=history,
-                turn=turn,
-            )
+            print(f"{indent}[Turn {turn+1}/{self.max_turns}] Calling LLM...")
+            code = self.llm.generate(prompt)
 
-            if self.verbose:
-                print("  [REPL] Turn {}/{} | doc={!r} | fits={}".format(
-                    turn, self.max_turns,
-                    document.name[:40],
-                    document.fits_in_window(self.llm.context_window),
-                ))
+            output, error = self._exec(code, ns.as_dict())
 
-            # B. Call LLM
-            try:
-                code = self.llm.generate(prompt)
-            except Exception as e:
-                err_msg = "LLM generation error: {}".format(e)
-                if self.verbose:
-                    print("  [REPL] " + err_msg)
-                history.append("# Turn {} LLM error:\n# {}".format(turn, err_msg))
-                continue
+            entry = f"[Turn {turn+1}]\n{code}\n"
+            entry += f"# OK" if not error else f"# ERROR: {error}"
+            history.append(entry)
 
-            code = _strip_markdown_fences(code)
-            final_literal = extract_final_literal(code)
-            if final_literal is not None:
-                namespace._fn_final(final_literal)
-                code = 'final("{}")'.format(final_literal.replace('"', '\\"'))
+            if error:
+                print(f"{indent}  ⚠ Code error: {error}")
+            if ns._done:
+                print(f"{indent}✓ Done in {turn+1} turn(s)")
+                return REPLResult(answer=ns._answer, turns=turn+1, succeeded=True)
 
-            if self.verbose:
-                print("  [REPL] Code ({} chars):\n{}".format(len(code), _indent(code, "    | ")))
-
-            # C. Execute code safely
-            error_msg = self._safe_exec(code, exec_globals)
-
-            # D. Append to history
-            if error_msg:
-                history.append(
-                    "# Turn {} code:\n{}\n# ERROR: {}".format(turn, code, error_msg)
-                )
-                if self.verbose:
-                    print("  [REPL] Exec error: {}".format(error_msg))
-            else:
-                history.append("# Turn {} code (OK):\n{}".format(turn, code))
-
-            # E. Check if done
-            if namespace._is_done:
-                llm_calls = self.llm.call_count - llm_calls_start
-                if self.verbose:
-                    print("  [REPL] Done after {} turn(s). Answer length: {} chars".format(
-                        turn, len(namespace._answer)
-                    ))
-                return REPLResult(
-                    answer=namespace._answer,
-                    succeeded=True,
-                    turns_used=turn,
-                    llm_calls=llm_calls,
-                )
-
-        # Max turns exhausted
-        llm_calls = self.llm.call_count - llm_calls_start
-        reason = "REPL timeout: final() was never called after {} turns".format(self.max_turns)
-        if self.verbose:
-            print("  [REPL] " + reason)
+        fallback = ns._answer or "No answer produced (max turns reached)."
+        print(f"{indent}✗ Timeout after {self.max_turns} turns")
         return REPLResult(
-            answer="[timeout: no answer produced for '{}']".format(document.name),
-            succeeded=False,
-            turns_used=self.max_turns,
-            llm_calls=llm_calls,
-            failure_reason=reason,
+            answer=fallback, turns=self.max_turns, succeeded=False,
+            failure=f"LLM never called final() in {self.max_turns} turns"
         )
 
-    # ------------------------------------------------------------------
-    # Prompt builder
-    # ------------------------------------------------------------------
-
-    def _build_prompt(
-        self,
-        document: Document,
-        question: str,
-        history: List[str],
-        turn: int,
-    ) -> str:
+    def _prompt(self, doc: Document, question: str, history: list[str]) -> str:
         """
-        Build the structured prompt shown to the LLM each REPL turn.
+        What enters the LLM's context window each turn.
 
-        Structure:
-          DOCUMENT METADATA
-          DOCUMENT PREVIEW (first 150 words)
-          QUESTION
-          HISTORY (previous turns)
-          INSTRUCTIONS
+        Critically: the full document is NEVER here.
+        Only: 150-word preview + word count + question + last 3 turns of history.
         """
-        fits = document.fits_in_window(self.llm.context_window)
-        preview = document.preview(self.PREVIEW_WORDS)
+        preview = doc.peek(0, 150)
+        history_str = "\n\n".join(history[-3:]) if history else "(first turn)"
 
-        parts = [
-            "=== RLM REPL Turn {}/{} ===".format(turn, self.max_turns),
-            "",
-            "DOCUMENT NAME: {}".format(document.name),
-            "WORD COUNT: {:,}".format(document.word_count),
-            "CONTEXT WINDOW: {:,} words".format(self.llm.context_window),
-            "FITS IN WINDOW: {}".format(fits),
-            "",
-            "DOCUMENT PREVIEW (first {} words):".format(self.PREVIEW_WORDS),
-            preview,
-            "",
-            "QUESTION: {}".format(question),
-        ]
+        return f"""DOCUMENT: '{doc.name}'
+DOCUMENT WORDS: {len(doc)}
+CONTEXT WINDOW: {self.llm.config.context_window} words
+FITS IN WINDOW: {'YES — answer directly' if doc.fits_in_window(self.llm.config.context_window) else 'NO — must split'}
 
-        if history:
-            parts += [
-                "",
-                "=== PREVIOUS TURNS (for self-correction) ===",
-            ]
-            parts += history[-3:]  # show last 3 turns to avoid prompt bloat
+DOCUMENT CONTENT {'(fits — read and answer)' if doc.fits_in_window(self.llm.config.context_window) else '(preview only)'}:
+{doc.content if doc.fits_in_window(self.llm.config.context_window) else preview + chr(10) + '[...document continues beyond context window...]'}
 
-        parts += [
-            "",
-            "=== YOUR TASK ===",
-            "",
-        ]
+QUESTION: {question}
 
-        k_suggestion = max(
-            2,
-            (document.word_count + self.llm.context_window - 1) // self.llm.context_window,
-        )
-        parts += build_repl_task_suffix(
-            fits=fits,
-            preview_words=self.PREVIEW_WORDS,
-            k_suggestion=k_suggestion,
-        )
+HISTORY:
+{history_str}
 
-        return "\n".join(parts)
+Write Python code. You MUST call final("answer") when done."""
 
-    # ------------------------------------------------------------------
-    # Safe exec wrapper
-    # ------------------------------------------------------------------
+    def _exec(self, code: str, ns: dict) -> tuple[str, Optional[str]]:
+        """Run LLM-generated code in the controlled namespace."""
+        code = code.strip()
+        for fence in ["```python", "```py", "```"]:
+            if code.startswith(fence):
+                code = code[len(fence):]
+        if code.endswith("```"):
+            code = code[:-3]
+        code = code.strip()
 
-    @staticmethod
-    def _safe_exec(
-        code: str,
-        exec_globals: dict,
-        timeout_sec: float = EXEC_TIMEOUT_SEC,
-    ) -> Optional[str]:
-        """
-        Execute *code* in *exec_globals*.
-        Returns None on success, or an error string on failure.
-        """
-        if not code.strip():
-            return "Empty code block - nothing to execute."
         try:
-            tree = ast.parse(code, filename="<llm_code>", mode="exec")
-            _SafeCodeValidator().visit(tree)
-            compiled = compile(tree, "<llm_code>", "exec")
-            deadline = time.monotonic() + max(0.01, timeout_sec)
-
-            def _trace(frame, event, arg):
-                if time.monotonic() > deadline:
-                    raise TimeoutError(
-                        "LLM code exceeded execution time limit ({:.2f}s).".format(timeout_sec)
-                    )
-                return _trace
-
-            previous_trace = sys.gettrace()
-            sys.settrace(_trace)
-            try:
-                exec(compiled, exec_globals)
-            finally:
-                sys.settrace(previous_trace)
-            return None
-        except Exception:
-            return traceback.format_exc(limit=3)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _strip_markdown_fences(text: str) -> str:
-    """
-    Extract Python-like code from LLM output.
-    Handles fenced blocks and chatty prose before the code block.
-    """
-    stripped = text.strip()
-    if not stripped:
-        return ""
-
-    lines = stripped.splitlines()
-
-    fence_start = None
-    for idx, line in enumerate(lines):
-        if line.strip().startswith("```"):
-            fence_start = idx
-            break
-    if fence_start is not None:
-        fence_end = None
-        for idx in range(fence_start + 1, len(lines)):
-            if lines[idx].strip() == "```":
-                fence_end = idx
-                break
-        if fence_end is not None:
-            inner = "\n".join(lines[fence_start + 1:fence_end]).strip()
-            if inner:
-                return inner
-            lines = lines[:fence_start] + lines[fence_end + 1:]
-
-    code_start = None
-    for idx, line in enumerate(lines):
-        if _looks_like_code_line(line):
-            code_start = idx
-            break
-
-    if code_start is not None:
-        return "\n".join(lines[code_start:]).strip()
-    return stripped
-
-
-def _looks_like_code_line(line: str) -> bool:
-    """Heuristic for finding where Python code starts in a chatty model response."""
-    stripped = line.strip()
-    if not stripped:
-        return False
-    if stripped.startswith("#"):
-        return True
-    code_prefixes = (
-        "final(",
-        "chunks =",
-        "results =",
-        "combined",
-        "answer =",
-        "summary =",
-        "main_points",
-        "full_text =",
-        "full_document_text =",
-        "for ",
-        "if ",
-    )
-    if stripped.startswith(code_prefixes):
-        return True
-    if "=" in stripped and not stripped.startswith(("Since ", "The ", "However", "Given ")):
-        return True
-    return False
-
-
-def _indent(text: str, prefix: str) -> str:
-    """Add *prefix* to every line of *text*."""
-    return "\n".join(prefix + line for line in text.splitlines())
+            exec(code, ns)
+            return "OK", None
+        except Exception as e:
+            return "", f"{type(e).__name__}: {e}"

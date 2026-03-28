@@ -1,76 +1,126 @@
-## RLM v0
+# RLM Implementation — Standard Recursive Language Model
 
-Recursive document question answering for large PDF and text files.
+## What this is
 
-### What this project does
+This is a complete implementation of **standard RLM** (Recursive Language Model)
+from Zhang et al. 2026. It is **NOT λ-RLM** (that is the follow-up system
+with formal guarantees — we implement that next).
 
-This project keeps the full document outside the LLM context window, then:
-
-- loads the source file into a `Document`
-- recursively splits large inputs into manageable chunks
-- asks the LLM to answer at the leaf level
-- synthesizes chunk answers into one final result
-
-It supports two execution styles:
-
-- `optimized`: deterministic recursion with targeted retrieval and synthesis
-- `repl`: LLM-generated recursive control flow inside a restricted Python sandbox
-
-### Key improvements in this version
-
-- reusable package API via `core.api.RLM`
-- async entrypoint via `RLM.acomplete(...)`
-- configurable primary and recursive models
-- generic OpenAI-compatible backend support
-- stronger optimized retrieval with chunk prioritization
-- richer safe REPL helpers like regex and JSON parsing
-- trajectory logging for recursive runs
-
-### CLI examples
-
-Use mock mode:
+## Quick start
 
 ```bash
-python main.py --mock --question "Summarize the main points"
+# 1. Install dependencies
+pip install pymupdf requests
+
+# 2. Get a free OpenRouter API key
+#    https://openrouter.ai/keys
+
+# 3. Set your key
+export OPENROUTER_API_KEY="sk-or-..."
+
+# 4. Drop your document in the folder
+cp your_document.pdf document_pdf/
+
+# 5. Run
+python main.py
 ```
 
-Use OpenRouter:
+## Project structure
 
-```bash
-python main.py --key "sk-or-v1-..." --model "nvidia/llama-3.1-nemotron-70b-instruct" --recursive-model "nvidia/llama-3.1-nemotron-70b-instruct" --mode optimized --question "Summarize the main points"
+```
+rlm_real/
+├── document_pdf/        ← DROP YOUR DOCUMENT HERE
+├── main.py              ← Single entry point — run this
+├── core/
+│   ├── document.py      ← Document class + PDF loader
+│   ├── llm.py           ← OpenRouter (NVIDIA) + MockLLM
+│   ├── repl.py          ← The open-ended REPL loop
+│   └── rlm_system.py    ← Orchestrator + recursion wiring
+└── rlm_result.txt       ← Output saved here after each run
 ```
 
-Use any OpenAI-compatible endpoint:
+## How the system flows (complete trace)
 
-```bash
-python main.py --backend openai-compatible --api-url "https://your-endpoint/v1/chat/completions" --key "..." --model "gpt-4o-mini" --recursive-model "gpt-4o-mini" --question "What is the key finding?"
+```
+You run main.py
+│
+├─ [1] load_document_from_folder("document_pdf/")
+│       Reads PDF → extracts text → creates Document object
+│       Full text stored in memory, NOT given to LLM yet
+│
+├─ [2] OpenRouterLLM(api_key, context_window=6000)
+│       Wraps NVIDIA Llama-3.1 Nemotron 70B via OpenRouter API
+│
+├─ [3] You type your question
+│
+└─ [4] RLMSystem.run(document, question)
+         │
+         └─ _call(document, depth=0)
+              │
+              ├─ Creates REPLNamespace
+              │    P = document (120K words, stored here)
+              │    sub_call = lambda doc, q: _call(doc, q, depth+1)
+              │    split, peek, merge, final also available
+              │
+              └─ REPLExecutor.run()
+                   │
+                   ├─ [Turn 1] Build prompt:
+                   │    "Document: 120K words, Preview: first 150 words..."
+                   │    "Question: ..."
+                   │    (document NOT fully in prompt — only metadata)
+                   │
+                   ├─ [Turn 1] Call LLM → gets back Python code:
+                   │    chunks = split(P, 4)
+                   │    results = [sub_call(c, question) for c in chunks]
+                   │    final(merge(results))
+                   │
+                   ├─ [Turn 1] exec(code, namespace)
+                   │    split(P, 4) → [30K, 30K, 30K, 30K chunks]
+                   │    sub_call(chunk1, q) → _call(chunk1, depth=1)
+                   │                            └─ REPL loop at depth 1
+                   │                               LLM sees full 30K text
+                   │                               LLM calls final("answer1")
+                   │    sub_call(chunk2, q) → _call(chunk2, depth=1) ...
+                   │    sub_call(chunk3, q) → ...
+                   │    sub_call(chunk4, q) → ...
+                   │    merge(["answer1","answer2","answer3","answer4"])
+                   │    final(merged_answer)  ← loop exits here
+                   │
+                   └─ Returns final merged answer
 ```
 
-### Python API
+## RLM vs λ-RLM comparison
 
-```python
-from core.api import RLM, RLMConfig
-from core.llm import MockLLM
+| Property              | Standard RLM (this code) | λ-RLM (next implementation) |
+|-----------------------|--------------------------|------------------------------|
+| Control flow          | LLM generates Python     | Pre-verified combinators     |
+| Termination           | Not guaranteed           | Proven (Theorem 1)           |
+| Cost before run       | Unknown                  | Exact (N = k*^d + 1)         |
+| Failure modes         | 4 (see below)            | 0 (all eliminated)           |
+| Code crashes          | Possible                 | Impossible (no generated code)|
+| 8B model accuracy     | ~14% avg                 | ~36% avg (+21.9 points)      |
+| Latency               | High (5-12 turns)        | 4x faster (1 combinator run) |
 
-llm = MockLLM()
-rlm = RLM(llm=llm, config=RLMConfig(leaf_chunk_words=800))
-result = rlm.complete("long context goes here", "Summarize the key points")
-print(result.answer)
-```
+## The 4 RLM failure modes (demonstrated in this code)
 
-### Architecture
+1. **Non-termination**: LLM calls `sub_call(P, q)` with same-size doc → infinite loop
+2. **Code errors**: LLM writes `chuncks` (typo) → NameError → exec() fails
+3. **Unpredictable cost**: LLM decides k=2 or k=50 unpredictably → bill varies 10x
+4. **Coding tax**: 7B model spends capacity writing Python, not reasoning
 
-- `core/document.py`: document model, slicing, splitting, PDF/TXT loading
-- `core/llm.py`: model backends and completion abstraction
-- `core/optimized_rlm.py`: deterministic recursive engine
-- `core/repl.py`: restricted REPL for agentic recursive control
-- `core/rlm_system.py`: orchestrator for REPL mode
-- `core/api.py`: reusable package-style entrypoint
-- `core/prompts.py`: shared prompt builders
-- `core/parser.py`: final-answer parsing helpers
+## LLM used
 
-### Tests
+**NVIDIA Llama-3.1 Nemotron 70B Instruct** via OpenRouter
 
-```bash
-python -m pytest tests/test_rlm.py
-```
+- Free tier available at openrouter.ai
+- 131K token context window
+- Strong instruction following + code generation
+- Good at producing clean Python for the REPL
+
+## Supported document types
+
+- `.pdf` — extracted via PyMuPDF
+- `.txt` — plain text files
+- `.md` — markdown files
+
+Drop one file in `document_pdf/` and run `main.py`.

@@ -115,9 +115,9 @@ class OptimizedRLMSystem:
             answer=answer,
             llm_calls=llm_calls,
             elapsed_sec=elapsed,
-            max_depth_reached=self._max_depth_reached,
+            max_depth=self._max_depth_reached,
             succeeded=not self._had_failure,
-            failure_reason=self._failure_reason,
+            failure=self._failure_reason,
         )
 
     def _process(self, document: Document, question: str, depth: int) -> str:

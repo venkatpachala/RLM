@@ -2,26 +2,23 @@
 main.py - RLM on your documents
 ================================
 
-USAGE (3 ways):
+USAGE:
 
-  Way 1 - Hardcode your key below (simplest):
-    Edit API_KEY = "sk-or-v1-your-key-here" in this file
-    python main.py
+  Local default (Ollama + Qwen):
+    python main.py --question "Summarize this document"
 
-  Way 2 - Pass everything as arguments (no prompts, no env vars needed):
+  OpenRouter:
     python main.py --key "sk-or-v1-..." --question "Summarize this document"
 
-  Way 3 - Environment variable:
-    On Windows CMD:    set OPENROUTER_API_KEY=sk-or-v1-...
-    On Windows PS:     $env:OPENROUTER_API_KEY="sk-or-v1-..."
-    On Mac/Linux:      export OPENROUTER_API_KEY=sk-or-v1-...
-    Then:              python main.py
+DEFAULT LOCAL MODEL:
+  Ollama with qwen2.5:3b
 
-GET A FREE API KEY:
+GET A FREE API KEY FOR OPENROUTER:
   https://openrouter.ai/keys
 
 INSTALL DEPENDENCIES FIRST:
   pip install pymupdf requests
+  ollama pull qwen2.5:3b
 """
 
 import os
@@ -43,18 +40,9 @@ def main():
     parser = argparse.ArgumentParser(description="RLM - Recursive Language Model")
     parser.add_argument("--key",      type=str, default="", help="OpenRouter API key")
     parser.add_argument("--question", type=str, default="", help="Question to ask")
-    parser.add_argument("--mock",     action="store_true",  help="Use mock LLM (no API needed)")
     parser.add_argument("--folder",   type=str, default="", help="Document folder path")
-    parser.add_argument("--model", type=str, default="", help="Primary chat model")
-    parser.add_argument("--recursive-model", type=str, default="", help="Optional cheaper model for recursive leaf/synthesis calls")
-    parser.add_argument(
-        "--backend",
-        type=str,
-        default="openrouter",
-        choices=("openrouter", "openai-compatible"),
-        help="LLM backend type",
-    )
-    parser.add_argument("--api-url", type=str, default="", help="Chat completions URL for openai-compatible backend")
+    parser.add_argument("--ollama-model", type=str, default="qwen2.5:3b", help="Ollama model name")
+    parser.add_argument("--ollama-url", type=str, default="http://127.0.0.1:11434/api/generate", help="Ollama generate API URL")
     parser.add_argument(
         "--mode",
         type=str,
@@ -78,7 +66,6 @@ def main():
 
     print("=" * 60)
     print("  RLM - Recursive Language Model")
-    print("  github.com/lambda-calculus-LLM/lambda-RLM")
     print("=" * 60)
     print()
 
@@ -118,66 +105,26 @@ def main():
         or API_KEY.strip()
         or os.environ.get("OPENROUTER_API_KEY", "").strip()
     )
-
-    # ── Step 4: Build LLM ────────────────────────────────────────────────────
     print("[Step 2/4] Setting up LLM...")
 
-    use_mock = args.mock or not resolved_key
-
-    if use_mock:
-        if not resolved_key:
-            print("  WARNING: No API key found.")
-            print()
-            print("  To use the real NVIDIA model, do ONE of these:")
-            print("    a) Edit API_KEY = \"your-key\" at the top of main.py")
-            print("    b) Run: python main.py --key \"your-key\"")
-            print("    c) On Windows CMD: set OPENROUTER_API_KEY=your-key")
-            print("    d) Get a free key at: https://openrouter.ai/keys")
-            print()
-            print("  Falling back to MockLLM (simulated responses)...")
-        else:
-            print("  Using MockLLM as requested (--mock flag)")
-        from core.llm import MockLLM
-        llm = MockLLM(context_window=CONTEXT_WINDOW_WORDS, mode="smart", verbose=True)
-        recursive_llm = llm
-    else:
-        model_name = args.model.strip() or "nvidia/llama-3.1-nemotron-70b-instruct"
-        recursive_model_name = args.recursive_model.strip() or model_name
-        print("  Model   : {}".format(model_name))
-        print("  Recursive model : {}".format(recursive_model_name))
+    if resolved_key:
+        print("  Provider: OpenRouter")
+        print("  Model   : nvidia/llama-3.1-nemotron-70b-instruct")
         print("  Window  : {:,} words per chunk".format(CONTEXT_WINDOW_WORDS))
-        if args.backend == "openai-compatible":
-            api_url = args.api_url.strip() or os.environ.get("OPENAI_COMPATIBLE_API_URL", "").strip()
-            if not api_url:
-                raise ValueError("--api-url or OPENAI_COMPATIBLE_API_URL is required for openai-compatible backend")
-            print("  Via     : OpenAI-compatible API")
-            print("  URL     : {}".format(api_url))
-            from core.llm import OpenAICompatibleLLM
-            llm = OpenAICompatibleLLM(
-                api_key=resolved_key,
-                context_window=CONTEXT_WINDOW_WORDS,
-                model=model_name,
-                api_url=api_url,
-            )
-            recursive_llm = OpenAICompatibleLLM(
-                api_key=resolved_key,
-                context_window=CONTEXT_WINDOW_WORDS,
-                model=recursive_model_name,
-                api_url=api_url,
-            )
-        else:
-            print("  Via     : OpenRouter API")
-            from core.llm import OpenRouterLLM
-            llm = OpenRouterLLM(
-                api_key=resolved_key,
-                context_window=CONTEXT_WINDOW_WORDS,
-                model=model_name,
-            )
-            recursive_llm = OpenRouterLLM(
-                api_key=resolved_key,
-                context_window=CONTEXT_WINDOW_WORDS,
-                model=recursive_model_name,
-            )
+        from core.llm import OpenRouterLLM
+        llm = OpenRouterLLM(api_key=resolved_key, context_window=CONTEXT_WINDOW_WORDS)
+    else:
+        print("  Provider: Ollama")
+        print("  Model   : {}".format(args.ollama_model))
+        print("  Endpoint: {}".format(args.ollama_url))
+        print("  Window  : {:,} words per chunk".format(CONTEXT_WINDOW_WORDS))
+        print("  Tip     : Run 'ollama pull {}' first if needed".format(args.ollama_model))
+        from core.llm import OllamaLLM
+        llm = OllamaLLM(
+            model=args.ollama_model,
+            context_window=CONTEXT_WINDOW_WORDS,
+            api_url=args.ollama_url,
+        )
 
     print()
 
@@ -245,12 +192,7 @@ def main():
                 enable_final_synthesis=True,
                 log_path=args.log or None,
             )
-            rlm = OptimizedRLMSystem(
-                llm=llm,
-                recursive_llm=recursive_llm,
-                config=config,
-                verbose=True,
-            )
+            rlm = OptimizedRLMSystem(llm=llm, config=config, verbose=True)
         else:
             from core.rlm_system import RLMSystem
             rlm = RLMSystem(llm=llm, max_depth=6, max_turns_per_node=5, verbose=True)

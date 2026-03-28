@@ -1,462 +1,408 @@
-"""
-core/llm.py - Layer 2: The LLM Oracle
-=======================================
-
-Provides LLM backends:
-
-  OpenAICompatibleLLM -- Generic OpenAI-compatible chat backend.
-                         Can target OpenRouter and other compatible endpoints.
-
-  OpenRouterLLM       -- Convenience subclass for OpenRouter defaults.
-
-  MockLLM             -- Offline simulation for testing (no API key required).
-                         Generates deterministic, syntactically-correct Python
-                         code that exercises the full RLM split/merge loop.
-
-Both share the same BaseLanguageModel interface:
-  .generate(prompt: str) -> str       # core oracle call
-  .fits_in_window(text: str) -> bool  # True if text fits context window
-  .call_count                         # how many LLM calls made so far
-"""
-
-from __future__ import annotations
-
+import re
 import time
+import random
+import requests
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional
 
-try:
-    import requests as _requests
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
 
 
-# ---------------------------------------------------------------------------
-# Base interface
-# ---------------------------------------------------------------------------
+@dataclass
+class LLMConfig:
+    name: str
+    context_window: int     # K: max words the model handles reliably
+    cost_per_1k_input: float = 0.0
+    cost_per_1k_output: float = 0.0
 
-class BaseLanguageModel(ABC):
-    """Abstract base class for all LLM backends."""
 
-    def __init__(self, context_window: int = 6000):
-        self.context_window: int = context_window
-        self.call_count: int = 0
-        self._total_prompt_words: int = 0
-        self._total_response_words: int = 0
 
-    def fits_in_window(self, text: str) -> bool:
-        """Return True when *text* word count fits inside the context window."""
-        return len(text.split()) <= self.context_window
+class BaseLLM(ABC):
+    def __init__(self, config: LLMConfig):
+        self.config = config
+        self.call_count = 0
+        self.total_input_words = 0
+        self.total_output_words = 0
+
+    @property
+    def context_window(self) -> int:
+        return self.config.context_window
 
     @abstractmethod
     def generate(self, prompt: str) -> str:
-        """Send *prompt* to the LLM and return the raw response string."""
+        pass
 
-    @abstractmethod
     def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Send a normal text-generation prompt and return the response string."""
+        """
+        Text-completion style helper used by the optimized pipeline.
+        Providers can override this for a cleaner non-code path.
+        """
+        return self.generate(prompt)
 
-    def _record_call(self, prompt: str, response: str) -> None:
+    def _record(self, prompt: str, response: str):
         self.call_count += 1
-        self._total_prompt_words += len(prompt.split())
-        self._total_response_words += len(response.split())
+        self.total_input_words += len(prompt.split())
+        self.total_output_words += len(response.split())
 
-    def stats(self) -> dict:
-        return {
-            "call_count": self.call_count,
-            "total_prompt_words": self._total_prompt_words,
-            "total_response_words": self._total_response_words,
-        }
-
-
-# ---------------------------------------------------------------------------
-# OpenRouter / NVIDIA Llama backend
-# ---------------------------------------------------------------------------
-
-OPENROUTER_SYSTEM_PROMPT = """\
-You are a Python code generator for the RLM (Recursive Language Model) system.
-
-You have access to these pre-defined Python functions. Call them EXACTLY as shown:
-
-  split(P, k)        -- Split document P into k equal chunks.
-                        Returns a list of Document objects.
-
-  sub_call(doc, q)   -- Recursively process document chunk `doc` with question `q`.
-                        Returns a string answer.
-
-  merge(answers)     -- Merge a list of string answers into one combined answer.
-                        Filters blanks and joins non-empty ones.
-
-  final(answer)      -- Declare your final answer. This ENDS the current REPL turn.
-                        You MUST call final() at the end of every code block.
-
-  peek(P, start, end)-- Read words[start:end] of document P as a string.
-
-Rules you MUST follow:
-  1. Output ONLY valid Python code — no markdown, no backticks, no explanation.
-  2. Always call final() exactly once, at the end.
-  3. Never import anything. All functions are already in scope.
-  4. When the document fits in the window (fits=True), use peek() if you need more than the preview.
-     Answer directly only after you have inspected enough text.
-  5. When the document does NOT fit (fits=False), call split() then sub_call() on each chunk.
-  6. Use merge() to combine sub_call results before calling final().
-  7. Use the live variables exactly as provided:
-     - Use P for the current Document object, never a string like "document.pdf"
-     - Use Q for the current question unless you intentionally rewrite it
-  8. Valid examples:
-     - chunks = split(P, 4)
-     - results.append(sub_call(doc=chunk, q=Q))
-  9. Invalid examples:
-     - split(P="document.pdf", k=4)
-     - split("document.pdf", 4)
-     - sub_call(chunk=chunk, question=Q)
-
-Example (document fits in window):
-  final("The document discusses climate change impacts on coastal regions.")
-
-Example (document does NOT fit, split into 4):
-  chunks = split(P, 4)
-  results = [sub_call(c, Q) for c in chunks]
-  combined = merge(results)
-final(combined)
-"""
-
-TEXT_SYSTEM_PROMPT = """\
-You are a precise document-analysis assistant.
-
-Rules:
-1. Answer in normal text, not code.
-2. Be concise, factual, and non-redundant.
-3. If asked to synthesize chunk summaries, merge them into one coherent answer.
-4. Do not mention missing context unless it is genuinely necessary.
-"""
+    def stats(self) -> str:
+        return (f"LLM '{self.config.name}' | "
+                f"Calls: {self.call_count} | "
+                f"Input words: {self.total_input_words:,} | "
+                f"Output words: {self.total_output_words:,}")
 
 
-class OpenAICompatibleLLM(BaseLanguageModel):
+class OpenRouterLLM(BaseLLM):
     """
-    Calls any OpenAI-compatible chat completions endpoint.
+    Calls NVIDIA's Llama-3.1 Nemotron 70B via OpenRouter.
+    This model is free to use with an OpenRouter API key.
 
-    Args:
-        api_key:        API key for the endpoint.
-        context_window: Max words per chunk sent to LLM (default 6000).
-        model:          Model slug to use.
-        api_url:        Full chat completions endpoint URL.
-        referer:        Optional referer header.
-        title:          Optional title header.
-        verbose:        Print call start/end markers.
-    """
+    Model: nvidia/llama-3.1-nemotron-70b-instruct
+    Why this model:
+      - 70B parameters → strong reasoning + code writing
+      - Free tier on OpenRouter
+      - 131K context window → can handle large document chunks
+      - Good instruction following (critical for RLM code generation)
 
-    def __init__(
-        self,
-        api_key: str,
-        context_window: int = 6000,
-        model: str = "gpt-4o-mini",
-        api_url: str = "https://api.openai.com/v1/chat/completions",
-        referer: Optional[str] = None,
-        title: Optional[str] = None,
-        verbose: bool = False,
-    ):
-        super().__init__(context_window=context_window)
-        if not api_key:
-            raise ValueError(
-                "OpenRouter API key is required. "
-                "Get a free key at https://openrouter.ai/keys"
-            )
-        if not HAS_REQUESTS:
-            raise ImportError(
-                "The 'requests' library is required.\n"
-                "Install it with:  pip install requests"
-            )
-        self.api_key = api_key
-        self.model = model
-        self.api_url = api_url
-        self.referer = referer
-        self.title = title
-        self.verbose = verbose
-
-    def generate(self, prompt: str) -> str:
-        """
-        Send *prompt* to OpenRouter and return the response text.
-        Raises RuntimeError on API errors after retries.
-        """
-        if self.verbose:
-            print("  [LLM #{} -> {}]".format(self.call_count + 1, self.model))
-
-        headers = {
-            "Authorization": "Bearer {}".format(self.api_key),
-            "Content-Type": "application/json",
-        }
-        if self.referer:
-            headers["HTTP-Referer"] = self.referer
-        if self.title:
-            headers["X-Title"] = self.title
-
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": OPENROUTER_SYSTEM_PROMPT},
-                {"role": "user",   "content": prompt},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 1024,
-        }
-
-        last_error: Optional[Exception] = None
-        for attempt in range(3):
-            try:
-                resp = _requests.post(
-                    self.api_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=60,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                response_text = data["choices"][0]["message"]["content"].strip()
-                self._record_call(prompt, response_text)
-                return response_text
-
-            except _requests.exceptions.Timeout:
-                last_error = TimeoutError("OpenRouter API timed out (60s)")
-                if attempt < 2:
-                    time.sleep(2 ** attempt)
-
-            except _requests.exceptions.HTTPError as e:
-                status = e.response.status_code if e.response else "?"
-                try:
-                    body = e.response.json()
-                    msg = body.get("error", {}).get("message", str(e))
-                except Exception:
-                    msg = str(e)
-                last_error = RuntimeError(
-                    "Chat completion HTTP {} error: {}".format(status, msg)
-                )
-                if status in (429, 500, 502, 503) and attempt < 2:
-                    time.sleep(2 ** attempt)
-                else:
-                    break
-
-            except Exception as e:
-                last_error = e
-                break
-
-        raise RuntimeError(
-            "Chat completion call failed after retries: {}".format(last_error)
-        )
-
-    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Send a standard text prompt to OpenRouter and return plain text."""
-        if self.verbose:
-            print("  [LLM #{} -> {} | text]".format(self.call_count + 1, self.model))
-
-        headers = {
-            "Authorization": "Bearer {}".format(self.api_key),
-            "Content-Type": "application/json",
-        }
-        if self.referer:
-            headers["HTTP-Referer"] = self.referer
-        if self.title:
-            headers["X-Title"] = self.title
-
-        payload = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt or TEXT_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.1,
-            "max_tokens": 1024,
-        }
-
-        last_error: Optional[Exception] = None
-        for attempt in range(3):
-            try:
-                resp = _requests.post(
-                    self.api_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=60,
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                response_text = data["choices"][0]["message"]["content"].strip()
-                self._record_call(prompt, response_text)
-                return response_text
-            except _requests.exceptions.Timeout:
-                last_error = TimeoutError("OpenRouter API timed out (60s)")
-                if attempt < 2:
-                    time.sleep(2 ** attempt)
-            except _requests.exceptions.HTTPError as e:
-                status = e.response.status_code if e.response else "?"
-                try:
-                    body = e.response.json()
-                    msg = body.get("error", {}).get("message", str(e))
-                except Exception:
-                    msg = str(e)
-                last_error = RuntimeError(
-                    "Chat completion HTTP {} error: {}".format(status, msg)
-                )
-                if status in (429, 500, 502, 503) and attempt < 2:
-                    time.sleep(2 ** attempt)
-                else:
-                    break
-            except Exception as e:
-                last_error = e
-                break
-
-        raise RuntimeError(
-            "Text completion call failed after retries: {}".format(last_error)
-        )
-
-
-class OpenRouterLLM(OpenAICompatibleLLM):
-    """
-    Convenience backend for OpenRouter with the existing project defaults.
+    Get your free API key at: https://openrouter.ai/keys
     """
 
     MODEL = "nvidia/llama-3.1-nemotron-70b-instruct"
     API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-    def __init__(
-        self,
-        api_key: str,
-        context_window: int = 6000,
-        model: Optional[str] = None,
-        verbose: bool = False,
-    ):
-        super().__init__(
-            api_key=api_key,
+    SYSTEM_PROMPT = """You are an RLM (Recursive Language Model) agent.
+    You are solving a reasoning task over a long document.
+    The document is stored externally as variable P — you CANNOT read it all at once.
+
+    Your job: write Python code using only these functions:
+
+    split(P, k)                → splits document P into k equal chunks (list of Documents)
+    peek(P, start, end)        → reads words[start:end] from P as a string (cheap, no cost)
+    sub_call(chunk, question)  → recursively solves question on a smaller chunk (returns string)
+    merge(list_of_answers)     → combines a list of string answers into one string
+    final(answer_string)       → SIGNALS COMPLETION — you MUST call this when you have the answer
+
+    RULES:
+    1. Always end with final("your answer here") — this is mandatory
+    2. If the document is too big, use split() and sub_call()
+    3. If the document fits (DOCUMENT WORDS ≤ CONTEXT WINDOW), read and answer directly
+    4. Write only clean Python — no markdown fences, no explanations
+    5. sub_call() returns a plain string answer, not a Document
+    6. Keep it simple — 5-10 lines of code maximum
+
+    EXAMPLE for a document that fits:
+    answer = "The document discusses..."
+    final(answer)
+
+    EXAMPLE for a large document:
+    chunks = split(P, 4)
+    results = [sub_call(c, question) for c in chunks]
+    final(merge(results))
+    """
+
+    def __init__(self, api_key: str, context_window: int = 8000):
+        config = LLMConfig(
+            name="nvidia/llama-3.1-nemotron-70b-instruct",
             context_window=context_window,
-            model=model or self.MODEL,
-            api_url=self.API_URL,
-            referer="https://github.com/rlm-project/rlm_v0",
-            title="RLM Document Processor",
-            verbose=verbose,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
         )
+        super().__init__(config)
+        self.api_key = api_key
+
+    def generate(self, prompt: str) -> str:
+        """
+        Call OpenRouter API with the NVIDIA model.
+        Includes retry logic for rate limits and transient errors.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/rlm-impl",
+            "X-Title": "RLM Implementation",
+        }
+
+        payload = {
+            "model": self.MODEL,
+            "messages": [
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt},
+            ],
+            "max_tokens": 800,
+            "temperature": 0.1,   
+        }
+
+        for attempt in range(3):
+            try:
+                print(f"  [OpenRouter] Calling {self.MODEL}...")
+                response = requests.post(
+                    self.API_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=60,
+                )
+
+                if response.status_code == 429:
+                    wait = 2 ** attempt
+                    print(f"  [OpenRouter] Rate limited — waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+
+                if response.status_code != 200:
+                    error_body = response.text[:300]
+                    raise RuntimeError(
+                        f"OpenRouter API error {response.status_code}: {error_body}"
+                    )
+
+                data = response.json()
+                text = data["choices"][0]["message"]["content"].strip()
+
+                # Strip markdown fences the model sometimes adds
+                text = self._clean_code(text)
+
+                print(f"  [OpenRouter] Response ({len(text.split())} words):\n"
+                      f"  {text[:200]}{'...' if len(text) > 200 else ''}")
+
+                self._record(prompt, text)
+                return text
+
+            except requests.Timeout:
+                print(f"  [OpenRouter] Timeout on attempt {attempt+1}")
+                if attempt == 2:
+                    return 'final("Error: API timeout after 3 attempts.")'
+                time.sleep(2)
+            except Exception as e:
+                if attempt == 2:
+                    return f'final("Error calling API: {str(e)[:100]}")'
+                time.sleep(1)
+
+        return 'final("Error: all retry attempts failed.")'
+
+    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """
+        Plain text completion for the deterministic optimized pipeline.
+        """
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/rlm-impl",
+            "X-Title": "RLM Implementation",
+        }
+
+        payload = {
+            "model": self.MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt or "Answer accurately and concisely using only the supplied document text.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 800,
+            "temperature": 0.1,
+        }
+
+        for attempt in range(3):
+            try:
+                print(f"  [OpenRouter] Completing with {self.MODEL}...")
+                response = requests.post(
+                    self.API_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=60,
+                )
+                if response.status_code == 429:
+                    wait = 2 ** attempt
+                    print(f"  [OpenRouter] Rate limited - waiting {wait}s...")
+                    time.sleep(wait)
+                    continue
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"OpenRouter API error {response.status_code}: {response.text[:300]}"
+                    )
+
+                data = response.json()
+                text = data["choices"][0]["message"]["content"].strip()
+                self._record(prompt, text)
+                return text
+            except requests.Timeout:
+                print(f"  [OpenRouter] Timeout on attempt {attempt + 1}")
+                if attempt == 2:
+                    raise RuntimeError("OpenRouter text call timed out after 3 attempts")
+                time.sleep(2)
+            except Exception as exc:
+                if attempt == 2:
+                    raise RuntimeError(f"OpenRouter text call failed after retries: {exc}")
+                time.sleep(1)
+
+    def _clean_code(self, text: str) -> str:
+        """Remove markdown fences if the model wrapped its code."""
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        return text
 
 
-# ---------------------------------------------------------------------------
-# MockLLM — for offline testing
-# ---------------------------------------------------------------------------
-
-class MockLLM(BaseLanguageModel):
+class OllamaLLM(BaseLLM):
     """
-    Offline mock that generates deterministic RLM-compatible Python code.
-
-    Modes:
-      'smart'        -- Always writes correct split/sub_call/merge/final code.
-      'direct'       -- If doc fits, writes a direct final() answer.
-                        (Used automatically when doc fits in window.)
-
-    Args:
-        context_window: Max words per chunk (default 6000).
-        mode:           'smart' (default).
-        verbose:        Print simulated responses.
+    Local Ollama-backed LLM. Defaults to a small Qwen model so the project can
+    run without an OpenRouter key when Ollama is installed locally.
     """
+
+    MODEL = "qwen2.5:3b"
+    API_URL = "http://127.0.0.1:11434/api/generate"
+
+    SYSTEM_PROMPT = OpenRouterLLM.SYSTEM_PROMPT
 
     def __init__(
         self,
-        context_window: int = 6000,
-        mode: str = "smart",
-        verbose: bool = False,
+        model: str = MODEL,
+        context_window: int = 8000,
+        api_url: str = API_URL,
     ):
-        super().__init__(context_window=context_window)
+        config = LLMConfig(
+            name=f"ollama/{model}",
+            context_window=context_window,
+            cost_per_1k_input=0.0,
+            cost_per_1k_output=0.0,
+        )
+        super().__init__(config)
+        self.model = model
+        self.api_url = api_url
+
+    def generate(self, prompt: str) -> str:
+        full_prompt = (
+            self.SYSTEM_PROMPT.strip()
+            + "\n\nUSER TASK:\n"
+            + prompt.strip()
+        )
+        text = self._request(full_prompt, temperature=0.1)
+        cleaned = self._clean_code(text)
+        self._record(prompt, cleaned)
+        return cleaned
+
+    def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        full_prompt = (
+            (system_prompt or "Answer accurately and concisely using only the supplied document text.").strip()
+            + "\n\nUSER TASK:\n"
+            + prompt.strip()
+        )
+        text = self._request(full_prompt, temperature=0.1)
+        self._record(prompt, text)
+        return text.strip()
+
+    def _request(self, prompt: str, temperature: float) -> str:
+        payload = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": temperature,
+            },
+        }
+
+        try:
+            print(f"  [Ollama] Calling {self.model}...")
+            response = requests.post(self.api_url, json=payload, timeout=120)
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Ollama API error {response.status_code}: {response.text[:300]}"
+                )
+            data = response.json()
+            return data.get("response", "").strip()
+        except requests.ConnectionError as exc:
+            raise RuntimeError(
+                "Could not reach Ollama at {}. Start Ollama and run 'ollama pull {}' first.".format(
+                    self.api_url, self.model
+                )
+            ) from exc
+
+    @staticmethod
+    def _clean_code(text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        return text
+
+
+
+class MockLLM(BaseLLM):
+    """
+    Deterministic mock for testing without an API key.
+
+    Simulates two behaviours:
+      mode="smart"  — writes clean code, finds answers correctly
+      mode="buggy"  — demonstrates the 4 RLM failure modes
+    """
+
+    def __init__(self, context_window: int = 500, mode: str = "smart",
+                 verbose: bool = True):
+        config = LLMConfig(name=f"mock-{mode}", context_window=context_window)
+        super().__init__(config)
         self.mode = mode
         self.verbose = verbose
 
     def generate(self, prompt: str) -> str:
-        """
-        Inspect the prompt for context clues, then return synthetic Python code.
-        The generated code always correctly calls final().
-        """
-        response = self._build_response(prompt)
+        doc_len = self._extract_doc_length(prompt)
+        is_leaf = doc_len is None or doc_len <= self.config.context_window
+
         if self.verbose:
-            print("  [MockLLM #{}] Generated {} words of code".format(
-                self.call_count + 1, len(response.split())
-            ))
-        self._record_call(prompt, response)
+            leaf_str = "LEAF" if is_leaf else f"DECOMPOSE (doc={doc_len})"
+            print(f"  [MockLLM #{self.call_count+1}] {leaf_str}")
+
+        if self.mode == "buggy" and random.random() < 0.5:
+            response = self._buggy(prompt)
+        elif is_leaf:
+            response = self._answer_leaf(prompt)
+        else:
+            response = self._decompose(doc_len)
+
+        self._record(prompt, response)
         return response
 
     def complete_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """Return a deterministic text answer for testing the optimized mode."""
-        response = self._build_text_response(prompt)
-        self._record_call(prompt, response)
-        return response
+        response = self._answer_leaf(prompt)
+        match = re.fullmatch(r'final\("(.*)"\)', response)
+        text = match.group(1) if match else response
+        self._record(prompt, text)
+        return text
 
-    # ------------------------------------------------------------------
-    # Response builder
-    # ------------------------------------------------------------------
+    def _decompose(self, doc_len: int) -> str:
+        k = min(6, max(2, doc_len // self.config.context_window + 1))
+        return f"""chunks = split(P, {k})
+        results = [sub_call(c, question) for c in chunks]
+        final(merge(results))"""
 
-    def _build_response(self, prompt: str) -> str:
-        """
-        Parse the prompt to determine fits/no-fits, then return the
-        appropriate code pattern.
-        """
-        fits = self._prompt_says_fits(prompt)
-        word_count = self._extract_word_count(prompt)
+    def _answer_leaf(self, prompt: str) -> str:
+        p = prompt.lower()
+        if "penalty" in p:
+            if "2%" in p or "section 14" in p or "late" in p:
+                return 'final("FOUND: Section 14.3 — Late delivery penalty: 2%/week, capped at 20%.")'
+            elif "section 22" in p or "ip breach" in p:
+                return 'final("FOUND: Section 22.1 — IP breach: full contract value + legal fees.")'
+            return 'final("No penalty clauses found in this section.")'
+        return 'final("Section processed — no specific findings.")'
 
-        if fits:
-            # Document fits in window: answer directly
-            return (
-                'final("This section covers information extracted directly '
-                'from the document chunk ({} words).  '
-                '[MockLLM simulated answer]")'.format(word_count)
-            )
-        else:
-            # Document does NOT fit: split into optimal k, recurse
-            k = self._optimal_k(word_count)
-            return (
-                "chunks = split(P, {k})\n"
-                "results = [sub_call(c, Q) for c in chunks]\n"
-                "combined = merge(results)\n"
-                "final(combined)"
-            ).format(k=k)
+    def _buggy(self, prompt: str) -> str:
+        bugs = [
+            'chuncks = split(P, 3)\nresults = [sub_call(c, question) for c in chuncks]\nfinal(merge(results))',
+            'result = sub_call(P, question)\nfinal(result)',   # infinite recursion
+            'chunks = split(P, 2)\nfor c in chunks:\n    sub_call(c, question)\n# no final()',
+        ]
+        chosen = random.choice(bugs)
+        print(f"  [MockLLM] SIMULATED BUG")
+        return chosen
 
-    def _prompt_says_fits(self, prompt: str) -> bool:
-        """
-        Check whether the REPL prompt indicates the document fits in the window.
-        The REPLExecutor injects 'FITS IN WINDOW: True/False' into the prompt.
-        """
-        lower = prompt.lower()
-        if "fits in window: true" in lower:
-            return True
-        if "fits in window: false" in lower:
-            return False
-        # Fallback: estimate from the word count line
-        wc = self._extract_word_count(prompt)
-        return wc <= self.context_window
+    def _extract_doc_length(self, prompt: str) -> Optional[int]:
+        m = re.search(r'DOCUMENT WORDS:\s*(\d[\d,]*)', prompt, re.IGNORECASE)
+        return int(m.group(1).replace(",", "")) if m else None
 
-    def _extract_word_count(self, prompt: str) -> int:
-        """
-        Extract 'WORD COUNT: N' from the prompt, or fall back to 0.
-        """
-        for line in prompt.splitlines():
-            lower = line.lower()
-            if "word count:" in lower:
-                parts = line.split(":")
-                if len(parts) >= 2:
-                    try:
-                        return int(parts[-1].strip().replace(",", ""))
-                    except ValueError:
-                        pass
-        return 0
 
-    def _optimal_k(self, word_count: int) -> int:
-        """
-        Choose the number of chunks so each chunk fits in the context window.
-        Minimum 2, safety maximum 20.
-        """
-        if word_count <= 0 or self.context_window <= 0:
-            return 2
-        k = (word_count + self.context_window - 1) // self.context_window
-        return max(2, min(k, 20))
-
-    def _build_text_response(self, prompt: str) -> str:
-        if "Synthesize the following chunk summaries" in prompt:
-            return "Unified summary based on chunk-level answers."
-        for line in prompt.splitlines():
-            if line.startswith("QUESTION:"):
-                question = line.split(":", 1)[1].strip()
-                return "Mock answer for: {}".format(question)
-        return "Mock answer."
+OpenAICompatibleLLM = OpenRouterLLM
