@@ -2,19 +2,44 @@
 RLM Result
 ============================================================
 Document : document.pdf
-Question : What is President's Address mentioned in the doc
-LLM calls: 1
-Time     : 4.3s
+Question : Summarize the document
+LLM calls: 7
+Time     : 62.9s
 Success  : True
 
 Answer:
 ------------------------------------------------------------
-**Concise Chunk-Level Answer**
+**Accurate, Concise, Non-Redundant Summary of "Manual of Parliamentary Procedures" (document.pdf)**
 
-**Question:** What is President's Address mentioned in the doc?
+**Purpose and Basis**: 
+* Compiles procedures for Indian Government Ministries/Departments handling Parliamentary work.
+* Based on Rules of Procedure for Lok Sabha and Rajya Sabha, and other governmental guidelines.
 
-**Answer:** 
-* **Location:** Mentioned in the Table of Contents (multiple excerpts)
-* **Page/Section Reference:** Section 6 (starting on page 36, as per excerpts 2, 3, and 4)
-* **Description/Details:** **NOT PROVIDED** in the given excerpts. Only the title "President's Address" is listed, with no accompanying description or details within the provided chunk text.
+**Scope and Limitations**:
+* Provides general guidance (not authoritative interpretations).
+* Departments may issue supplementary instructions.
+* Users advised to consult referenced publications in cases of doubt.
+
+**Key Content Areas**:
+
+1. **Parliamentary Business and Procedures**:
+	* Motions for Bills, Committees, Questions, and laying papers in Lok Sabha and Rajya Sabha.
+	* Guidelines for Consultative Committees and handling Questions.
+2. **Responding to Parliamentary Questions**:
+	* Detailed replies, document references, language matching, and supplementary notes.
+	* E-publishing and communication protocols.
+3. **Interactions with Financial Committees**:
+	* Examination types (comprehensive, audit report, horizontal).
+	* Procedures for nominations, information sharing, audit, and excesses.
+	* Confidentiality and representation guidelines.
+4. **Standing Committees**:
+	* Procedures, roles, and functions in examining Bills, Demands for Grants, and policy documents.
+	* Selection of subjects, sub-committees, evidence, and confidentiality protocols.
+
+**General Guidelines**:
+* Definitions for key terms (21 defined terms).
+* General Instructions for Departments, Officers, and Parliament Units.
+* Constitutional Articles (118 and 119) regulate business in Parliament. 
+
+**Note on Uncertainty**: Due to the summarized nature of the provided chunks, some aspects might not be fully represented. Access to the entire document (document.pdf) would provide a comprehensive understanding.
 ------------------------------------------------------------
