@@ -333,8 +333,26 @@ class OllamaLLM(BaseLLM):
                     timeout=self.request_timeout_sec,
                 )
                 if response.status_code != 200:
+                    error_text = response.text[:300]
+                    lowered = error_text.lower()
+                    if (
+                        response.status_code >= 500
+                        and "timed out waiting for llama runner to start" in lowered
+                    ):
+                        if attempt == self.max_retries:
+                            raise RuntimeError(
+                                "Ollama could not start the local runner for model '{}'. "
+                                "This is usually a local resource/startup issue rather than an RLM bug. "
+                                "Try restarting Ollama, closing other heavy apps, or switching to a lighter model.".format(
+                                    self.model
+                                )
+                            )
+                        wait_sec = 5 * (attempt + 1)
+                        print(f"  [Ollama] Runner startup timed out - retrying in {wait_sec}s...")
+                        time.sleep(wait_sec)
+                        continue
                     raise RuntimeError(
-                        f"Ollama API error {response.status_code}: {response.text[:300]}"
+                        f"Ollama API error {response.status_code}: {error_text}"
                     )
                 data = response.json()
                 return data.get("response", "").strip()

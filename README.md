@@ -5,7 +5,7 @@ Recursive document question answering over long files using two execution styles
 - `optimized` mode: deterministic recursive chunking with LLM leaf analysis and synthesis
 - `repl` mode: the LLM writes Python that decides how to recurse over the document
 
-The project is designed around one core idea: keep the full document outside the model context window, and only expose the parts the system needs at each step.
+The project is designed around one core idea: keep the full document outside the model context window, and only expose the parts the system needs at each step...
 
 ## What This Project Does
 
@@ -18,7 +18,6 @@ It supports:
 - PDF, TXT, and Markdown input files
 - deterministic recursive summarization
 - experimental REPL-driven recursive code generation
-- lookup-style fast paths that avoid full recursive traversal when possible
 - optional trajectory logging for the optimized pipeline
 
 ## Default Model Setup
@@ -139,15 +138,7 @@ The optimized pipeline can write a JSONL trajectory log:
 python main.py --question "Summarize the document" --log logs/run.jsonl
 ```
 
-### 6. Save generated REPL code
-
-When you run `--mode repl`, the LLM-generated Python code is also saved to:
-
-```text
-rlm_result.py
-```
-
-### 7. Useful runtime options
+### 6. Useful runtime options
 
 ```bash
 python main.py \
@@ -159,77 +150,6 @@ python main.py \
   --max-seconds 600
 ```
 
-For slower local Ollama models, increase the timeout:
-
-```bash
-python main.py \
-  --mode repl \
-  --ollama-model qwen2.5:3b \
-  --ollama-timeout-seconds 600 \
-  --question "What is President's Address mentioned in the doc"
-```
-
-## Why Responses Can Be Slow
-
-Long-document QA is slow for a few practical reasons:
-
-- the PDF in this repo is about `65,000` words
-- local models like `qwen2.5:3b` are much slower than hosted frontier models
-- `repl` mode asks the model to generate Python planning code before it can answer
-- recursive chunking can require many model calls for broad summarization questions
-
-The slowest combination is usually:
-
-- local Ollama
-- small model
-- `repl` mode
-- large document
-
-## What Has Been Optimized
-
-The current code includes a few performance optimizations:
-
-- Ollama request timeout is configurable from the CLI with `--ollama-timeout-seconds`
-- Ollama requests now retry on timeout instead of failing immediately
-- REPL code generation uses a lower output cap so local models spend less time generating long responses
-- optimized mode has a global lookup shortcut for fact-finding questions
-- REPL mode can shrink the root document to focused excerpts for lookup-style queries
-- optimized mode already prioritizes relevant chunks and focused excerpts for local fact lookup
-
-In practice, this means questions like:
-
-- "What is President's Address mentioned in the doc"
-- "What is the email of ..."
-- "Who is ..."
-
-can often avoid scanning the whole document recursively.
-
-## Recommended Speed Strategy
-
-If your priority is speed and reliability, use this order:
-
-1. `optimized` mode with Ollama
-2. `optimized` mode with OpenRouter
-3. `repl` mode only when you specifically want code-generation-driven recursion
-
-For broad summarization of a very large PDF:
-
-```bash
-python main.py --mode optimized --ollama-model qwen2.5:3b --question "Summarize the document"
-```
-
-For lookup-style questions:
-
-```bash
-python main.py --mode optimized --ollama-model qwen2.5:3b --question "What is President's Address mentioned in the doc"
-```
-
-For `repl` mode on slower hardware:
-
-```bash
-python main.py --mode repl --ollama-model qwen2.5:3b --ollama-timeout-seconds 600 --question "What is President's Address mentioned in the doc"
-```
-
 ## CLI Reference
 
 Main options:
@@ -239,7 +159,6 @@ Main options:
 - `--mode {optimized,repl}`: choose deterministic or REPL-driven execution
 - `--ollama-model`: local Ollama model name
 - `--ollama-url`: Ollama API endpoint
-- `--ollama-timeout-seconds`: per-request timeout for Ollama calls
 - `--key`: OpenRouter API key
 - `--log`: JSONL trace output path for optimized mode
 - `--max-llm-calls`: call budget in optimized mode
@@ -263,6 +182,74 @@ main.py
 ```
 
 ## Architecture In Depth
+## 🏗️ Architecture
+
+```mermaid
+flowchart TB
+    subgraph Input["🎯 Input Layer"]
+        A[/"User Query / Problem"/]
+    end
+
+    subgraph ReasoningPipeline["🧠 RLM Reasoning Pipeline"]
+        direction TB
+        
+        subgraph StepGen["Step 1: Reasoning Step Generation"]
+            B["LLM generates candidate\nreasoning steps"]
+        end
+        
+        subgraph MCTS["Step 2: Monte Carlo Tree Search (MCTS)"]
+            direction TB
+            C1["🌳 Selection\n(UCB1 scoring)"]
+            C2["🔀 Expansion\n(Generate child nodes)"]
+            C3["🎲 Simulation\n(Rollout to terminal state)"]
+            C4["⬆️ Backpropagation\n(Update node values)"]
+            C1 --> C2 --> C3 --> C4
+            C4 -.->|"Iterate"| C1
+        end
+        
+        subgraph Reward["Step 3: Reward / Verification"]
+            D1["Process Reward Model\n(PRM)"]
+            D2["Outcome Reward Model\n(ORM)"]
+            D3["LLM-as-a-Judge\nScoring"]
+            D1 & D2 & D3 --> D4["Aggregate\nReward Score"]
+        end
+        
+        subgraph Selection["Step 4: Best Path Selection"]
+            E["Select highest-reward\nreasoning chain"]
+        end
+    end
+
+    subgraph LLMBackend["⚙️ LLM Backend"]
+        direction LR
+        F1["OpenAI API\n(GPT-4o, etc.)"]
+        F2["Local Models\n(vLLM / HuggingFace)"]
+        F3["Any OpenAI-compatible\nEndpoint"]
+    end
+
+    subgraph Output["📤 Output Layer"]
+        G[/"Final Reasoned Answer\nwith Step-by-Step Chain"/]
+    end
+
+    A --> B
+    B --> C1
+    C4 --> D1 & D2 & D3
+    D4 --> E
+    E --> G
+
+    LLMBackend -.->|"Serves inference"| B
+    LLMBackend -.->|"Serves inference"| C2
+    LLMBackend -.->|"Serves inference"| C3
+    LLMBackend -.->|"Evaluates steps"| D3
+
+    style Input fill:#1a1a2e,stroke:#e94560,color:#fff,stroke-width:2px
+    style ReasoningPipeline fill:#16213e,stroke:#0f3460,color:#fff,stroke-width:2px
+    style StepGen fill:#0f3460,stroke:#e94560,color:#fff
+    style MCTS fill:#0f3460,stroke:#53d8fb,color:#fff
+    style Reward fill:#0f3460,stroke:#f0a500,color:#fff
+    style Selection fill:#0f3460,stroke:#00b894,color:#fff
+    style LLMBackend fill:#1a1a2e,stroke:#a29bfe,color:#fff,stroke-width:2px
+    style Output fill:#1a1a2e,stroke:#00b894,color:#fff,stroke-width:2px
+```
 
 ### 1. Entry Layer
 
@@ -374,7 +361,6 @@ Important design features:
 
 - deterministic chunking
 - overlap-aware splitting so information is less likely to fall across hard chunk boundaries
-- root-level global lookup shortcut for fact-style questions
 - lexical chunk prioritization for lookup-style questions
 - focused excerpt extraction for fact-finding questions
 - call budgets and wall-clock budgets
@@ -417,7 +403,6 @@ Key parts:
 - `REPLNamespace`: the restricted execution environment
 - `REPLExecutor`: the turn loop that prompts, runs code, and checks for completion
 - `RLMSystem`: the recursive orchestrator that injects `sub_call`
-- focused-root shortcut for lookup-style questions to reduce root prompt cost
 
 This architecture is more flexible but also less predictable.
 
@@ -504,12 +489,6 @@ After each CLI run, the final answer is written to:
 
 ```text
 rlm_result.txt
-```
-
-If `--mode repl` is used, the generated Python trace is also written to:
-
-```text
-rlm_result.py
 ```
 
 If `--log` is enabled in optimized mode, a JSONL trajectory file is also written.

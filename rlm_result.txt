@@ -1,0 +1,20 @@
+============================================================
+RLM Result
+============================================================
+Document : document.pdf
+Question : What is President's Address mentioned in the doc
+LLM calls: 1
+Time     : 4.3s
+Success  : True
+
+Answer:
+------------------------------------------------------------
+**Concise Chunk-Level Answer**
+
+**Question:** What is President's Address mentioned in the doc?
+
+**Answer:** 
+* **Location:** Mentioned in the Table of Contents (multiple excerpts)
+* **Page/Section Reference:** Section 6 (starting on page 36, as per excerpts 2, 3, and 4)
+* **Description/Details:** **NOT PROVIDED** in the given excerpts. Only the title "President's Address" is listed, with no accompanying description or details within the provided chunk text.
+------------------------------------------------------------
