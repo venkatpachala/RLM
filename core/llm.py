@@ -262,6 +262,10 @@ class OllamaLLM(BaseLLM):
         model: str = MODEL,
         context_window: int = 8000,
         api_url: str = API_URL,
+        request_timeout_sec: int = 600,
+        max_retries: int = 2,
+        code_num_predict: int = 256,
+        text_num_predict: int = 384,
     ):
         config = LLMConfig(
             name=f"ollama/{model}",
@@ -272,6 +276,10 @@ class OllamaLLM(BaseLLM):
         super().__init__(config)
         self.model = model
         self.api_url = api_url
+        self.request_timeout_sec = request_timeout_sec
+        self.max_retries = max_retries
+        self.code_num_predict = code_num_predict
+        self.text_num_predict = text_num_predict
 
     def generate(self, prompt: str) -> str:
         full_prompt = (
@@ -279,7 +287,11 @@ class OllamaLLM(BaseLLM):
             + "\n\nUSER TASK:\n"
             + prompt.strip()
         )
-        text = self._request(full_prompt, temperature=0.1)
+        text = self._request(
+            full_prompt,
+            temperature=0.1,
+            num_predict=self.code_num_predict,
+        )
         cleaned = self._clean_code(text)
         self._record(prompt, cleaned)
         return cleaned
@@ -290,35 +302,60 @@ class OllamaLLM(BaseLLM):
             + "\n\nUSER TASK:\n"
             + prompt.strip()
         )
-        text = self._request(full_prompt, temperature=0.1)
+        text = self._request(
+            full_prompt,
+            temperature=0.1,
+            num_predict=self.text_num_predict,
+        )
         self._record(prompt, text)
         return text.strip()
 
-    def _request(self, prompt: str, temperature: float) -> str:
+    def _request(self, prompt: str, temperature: float, num_predict: int) -> str:
         payload = {
             "model": self.model,
             "prompt": prompt,
             "stream": False,
             "options": {
                 "temperature": temperature,
+                "num_predict": num_predict,
             },
         }
 
-        try:
-            print(f"  [Ollama] Calling {self.model}...")
-            response = requests.post(self.api_url, json=payload, timeout=120)
-            if response.status_code != 200:
+        for attempt in range(self.max_retries + 1):
+            try:
+                print(
+                    f"  [Ollama] Calling {self.model} "
+                    f"(attempt {attempt + 1}/{self.max_retries + 1}, timeout={self.request_timeout_sec}s, max_tokens={num_predict})..."
+                )
+                response = requests.post(
+                    self.api_url,
+                    json=payload,
+                    timeout=self.request_timeout_sec,
+                )
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"Ollama API error {response.status_code}: {response.text[:300]}"
+                    )
+                data = response.json()
+                return data.get("response", "").strip()
+            except requests.ConnectionError as exc:
                 raise RuntimeError(
-                    f"Ollama API error {response.status_code}: {response.text[:300]}"
-                )
-            data = response.json()
-            return data.get("response", "").strip()
-        except requests.ConnectionError as exc:
-            raise RuntimeError(
-                "Could not reach Ollama at {}. Start Ollama and run 'ollama pull {}' first.".format(
-                    self.api_url, self.model
-                )
-            ) from exc
+                    "Could not reach Ollama at {}. Start Ollama and run 'ollama pull {}' first.".format(
+                        self.api_url, self.model
+                    )
+                ) from exc
+            except requests.Timeout as exc:
+                if attempt == self.max_retries:
+                    raise RuntimeError(
+                        "Ollama timed out after {} attempt(s). "
+                        "The local model may be slow or overloaded. "
+                        "Try a smaller model, optimized mode, or increase the timeout.".format(
+                            self.max_retries + 1
+                        )
+                    ) from exc
+                wait_sec = 2 ** attempt
+                print(f"  [Ollama] Timed out - retrying in {wait_sec}s...")
+                time.sleep(wait_sec)
 
     @staticmethod
     def _clean_code(text: str) -> str:

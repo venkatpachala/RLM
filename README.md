@@ -18,6 +18,7 @@ It supports:
 - PDF, TXT, and Markdown input files
 - deterministic recursive summarization
 - experimental REPL-driven recursive code generation
+- lookup-style fast paths that avoid full recursive traversal when possible
 - optional trajectory logging for the optimized pipeline
 
 ## Default Model Setup
@@ -138,7 +139,15 @@ The optimized pipeline can write a JSONL trajectory log:
 python main.py --question "Summarize the document" --log logs/run.jsonl
 ```
 
-### 6. Useful runtime options
+### 6. Save generated REPL code
+
+When you run `--mode repl`, the LLM-generated Python code is also saved to:
+
+```text
+rlm_result.py
+```
+
+### 7. Useful runtime options
 
 ```bash
 python main.py \
@@ -150,6 +159,77 @@ python main.py \
   --max-seconds 600
 ```
 
+For slower local Ollama models, increase the timeout:
+
+```bash
+python main.py \
+  --mode repl \
+  --ollama-model qwen2.5:3b \
+  --ollama-timeout-seconds 600 \
+  --question "What is President's Address mentioned in the doc"
+```
+
+## Why Responses Can Be Slow
+
+Long-document QA is slow for a few practical reasons:
+
+- the PDF in this repo is about `65,000` words
+- local models like `qwen2.5:3b` are much slower than hosted frontier models
+- `repl` mode asks the model to generate Python planning code before it can answer
+- recursive chunking can require many model calls for broad summarization questions
+
+The slowest combination is usually:
+
+- local Ollama
+- small model
+- `repl` mode
+- large document
+
+## What Has Been Optimized
+
+The current code includes a few performance optimizations:
+
+- Ollama request timeout is configurable from the CLI with `--ollama-timeout-seconds`
+- Ollama requests now retry on timeout instead of failing immediately
+- REPL code generation uses a lower output cap so local models spend less time generating long responses
+- optimized mode has a global lookup shortcut for fact-finding questions
+- REPL mode can shrink the root document to focused excerpts for lookup-style queries
+- optimized mode already prioritizes relevant chunks and focused excerpts for local fact lookup
+
+In practice, this means questions like:
+
+- "What is President's Address mentioned in the doc"
+- "What is the email of ..."
+- "Who is ..."
+
+can often avoid scanning the whole document recursively.
+
+## Recommended Speed Strategy
+
+If your priority is speed and reliability, use this order:
+
+1. `optimized` mode with Ollama
+2. `optimized` mode with OpenRouter
+3. `repl` mode only when you specifically want code-generation-driven recursion
+
+For broad summarization of a very large PDF:
+
+```bash
+python main.py --mode optimized --ollama-model qwen2.5:3b --question "Summarize the document"
+```
+
+For lookup-style questions:
+
+```bash
+python main.py --mode optimized --ollama-model qwen2.5:3b --question "What is President's Address mentioned in the doc"
+```
+
+For `repl` mode on slower hardware:
+
+```bash
+python main.py --mode repl --ollama-model qwen2.5:3b --ollama-timeout-seconds 600 --question "What is President's Address mentioned in the doc"
+```
+
 ## CLI Reference
 
 Main options:
@@ -159,6 +239,7 @@ Main options:
 - `--mode {optimized,repl}`: choose deterministic or REPL-driven execution
 - `--ollama-model`: local Ollama model name
 - `--ollama-url`: Ollama API endpoint
+- `--ollama-timeout-seconds`: per-request timeout for Ollama calls
 - `--key`: OpenRouter API key
 - `--log`: JSONL trace output path for optimized mode
 - `--max-llm-calls`: call budget in optimized mode
@@ -293,6 +374,7 @@ Important design features:
 
 - deterministic chunking
 - overlap-aware splitting so information is less likely to fall across hard chunk boundaries
+- root-level global lookup shortcut for fact-style questions
 - lexical chunk prioritization for lookup-style questions
 - focused excerpt extraction for fact-finding questions
 - call budgets and wall-clock budgets
@@ -335,6 +417,7 @@ Key parts:
 - `REPLNamespace`: the restricted execution environment
 - `REPLExecutor`: the turn loop that prompts, runs code, and checks for completion
 - `RLMSystem`: the recursive orchestrator that injects `sub_call`
+- focused-root shortcut for lookup-style questions to reduce root prompt cost
 
 This architecture is more flexible but also less predictable.
 
@@ -421,6 +504,12 @@ After each CLI run, the final answer is written to:
 
 ```text
 rlm_result.txt
+```
+
+If `--mode repl` is used, the generated Python trace is also written to:
+
+```text
+rlm_result.py
 ```
 
 If `--log` is enabled in optimized mode, a JSONL trajectory file is also written.

@@ -121,6 +121,7 @@ class REPLResult:
     turns: int
     succeeded: bool
     failure: Optional[str] = None
+    history: list[str] = field(default_factory=list)
 
 
 class REPLExecutor:
@@ -168,13 +169,19 @@ class REPLExecutor:
                 print(f"{indent}  ⚠ Code error: {error}")
             if ns._done:
                 print(f"{indent}✓ Done in {turn+1} turn(s)")
-                return REPLResult(answer=ns._answer, turns=turn+1, succeeded=True)
+                return REPLResult(
+                    answer=ns._answer,
+                    turns=turn+1,
+                    succeeded=True,
+                    history=history,
+                )
 
         fallback = ns._answer or "No answer produced (max turns reached)."
         print(f"{indent}✗ Timeout after {self.max_turns} turns")
         return REPLResult(
             answer=fallback, turns=self.max_turns, succeeded=False,
-            failure=f"LLM never called final() in {self.max_turns} turns"
+            failure=f"LLM never called final() in {self.max_turns} turns",
+            history=history,
         )
 
     def _prompt(self, doc: Document, question: str, history: list[str]) -> str:

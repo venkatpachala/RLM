@@ -41,6 +41,7 @@ class OptimizedRLMConfig:
     max_focused_excerpts: int = 6
     max_relevant_chunks: int = 6
     min_chunk_score: int = 1
+    enable_global_lookup_shortcut: bool = True
 
 
 class TrajectoryLogger:
@@ -144,6 +145,18 @@ class OptimizedRLMSystem:
             words=document.word_count,
         )
 
+        if depth == 0 and self.config.enable_global_lookup_shortcut:
+            shortcut_answer = self._try_global_lookup_shortcut(document, question, depth)
+            if shortcut_answer is not None:
+                self.logger.log(
+                    "node_end",
+                    depth=depth,
+                    document=document.name,
+                    answer_preview=shortcut_answer[:200],
+                    shortcut=True,
+                )
+                return shortcut_answer
+
         target = min(self.config.leaf_chunk_words, self.llm.context_window)
         if document.word_count <= target:
             answer = self._summarize_leaf(document, question, depth, target_words=target)
@@ -165,6 +178,34 @@ class OptimizedRLMSystem:
             answer_preview=answer[:200],
         )
         return answer
+
+    def _try_global_lookup_shortcut(self, document: Document, question: str, depth: int) -> Optional[str]:
+        """
+        For lookup-style questions, scan the full document locally, extract a
+        handful of relevant snippets, and answer from those snippets directly.
+        This avoids recursive chunk traversal when the answer is likely local.
+        """
+        if not self._is_lookup_question(question):
+            return None
+
+        excerpts = self._extract_focused_excerpts(document, question)
+        if not excerpts:
+            return None
+
+        content = "\n\n".join(excerpts)
+        prompt = build_leaf_prompt(
+            document_name=document.name,
+            word_count=document.word_count,
+            question=question,
+            content=content,
+        )
+        self.logger.log(
+            "global_lookup_shortcut",
+            depth=depth,
+            document=document.name,
+            excerpts=len(excerpts),
+        )
+        return self._llm_for_depth(depth).complete_text(prompt).strip()
 
     def _summarize_leaf(
         self,

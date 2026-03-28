@@ -1,4 +1,5 @@
 import time
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -15,6 +16,7 @@ class RLMResult:
     max_depth: int
     succeeded: bool
     failure: Optional[str] = None
+    repl_trace: Optional[list[str]] = None
 
     def display(self):
         sep = "═" * 60
@@ -79,6 +81,7 @@ class RLMSystem:
         self.max_turns = max_turns_per_node
         self.verbose = verbose
         self._max_depth_seen = 0
+        self._repl_trace: list[str] = []
 
     def run(self, document: Document, question: str) -> RLMResult:
         """Entry point. Call this with your loaded Document."""
@@ -91,6 +94,7 @@ class RLMSystem:
         print(f"{'#'*60}")
 
         self._max_depth_seen = 0
+        self._repl_trace = []
         calls_before = self.llm.call_count
         t0 = time.time()
 
@@ -103,6 +107,7 @@ class RLMSystem:
             elapsed_sec=elapsed,
             max_depth=self._max_depth_seen,
             succeeded=bool(answer and "error" not in answer.lower()[:20]),
+            repl_trace=list(self._repl_trace),
         )
         result.display()
         print(self.llm.stats())
@@ -119,6 +124,10 @@ class RLMSystem:
 
         if depth > self.max_depth:
             return f"(max recursion depth {self.max_depth} reached)"
+
+        if depth == 0:
+            doc = self._maybe_focus_root_document(doc, question)
+
         ns = REPLNamespace(
             document=doc,
             question=question,
@@ -127,4 +136,91 @@ class RLMSystem:
 
         executor = REPLExecutor(llm=self.llm, max_turns=self.max_turns)
         result = executor.run(doc, question, ns, depth=depth)
+        self._repl_trace.append(
+            "### Node depth={} doc='{}'\n{}".format(
+                depth,
+                doc.name,
+                "\n\n".join(result.history) if result.history else "# No generated code captured",
+            )
+        )
         return result.answer
+
+    def _maybe_focus_root_document(self, doc: Document, question: str) -> Document:
+        """
+        For lookup-style questions, shrink the root REPL document to a small set
+        of relevant excerpts so local models do not spend minutes planning over
+        a huge preview-only node.
+        """
+        if doc.fits_in_window(self.llm.config.context_window):
+            return doc
+        if not self._is_lookup_question(question):
+            return doc
+
+        excerpts = self._extract_focused_excerpts(doc, question)
+        if not excerpts:
+            return doc
+
+        excerpt_text = "\n\n".join(excerpts)
+        focused_doc = Document(
+            content=excerpt_text,
+            name=f"{doc.name}[focused excerpts]",
+            parent_name=doc.name,
+            depth=doc.depth + 1,
+        )
+        if self.verbose:
+            print(
+                "[RLM] Using focused excerpt document for lookup-style question "
+                f"({focused_doc.word_count:,} words)"
+            )
+        return focused_doc
+
+    @staticmethod
+    def _is_lookup_question(question: str) -> bool:
+        lower = question.lower()
+        markers = ("email", "e-mail", "phone", "contact", "address", "who is", "what is the")
+        return any(marker in lower for marker in markers)
+
+    @staticmethod
+    def _query_terms(question: str) -> list[str]:
+        stopwords = {
+            "what", "which", "when", "where", "who", "whom", "whose", "is", "the",
+            "of", "for", "and", "to", "in", "a", "an", "doc", "document", "mentioned",
+        }
+        terms = []
+        for raw in re.findall(r"[A-Za-z0-9@._-]+", question.lower()):
+            if len(raw) < 3 or raw in stopwords:
+                continue
+            terms.append(raw)
+        return terms
+
+    def _extract_focused_excerpts(self, doc: Document, question: str) -> list[str]:
+        terms = self._query_terms(question)
+        if not terms:
+            return []
+        words = doc.content.split()
+        lowered = [word.lower() for word in words]
+        excerpts = []
+        seen_ranges = set()
+
+        for idx, token in enumerate(lowered):
+            if not any(term in token for term in terms):
+                continue
+            start = max(0, idx - 50)
+            end = min(len(words), idx + 70)
+            key = (start, end)
+            if key in seen_ranges:
+                continue
+            seen_ranges.add(key)
+            excerpt = " ".join(words[start:end]).strip()
+            if excerpt:
+                excerpts.append(
+                    "EXCERPT {} (words {}-{}):\n{}".format(
+                        len(excerpts) + 1,
+                        start,
+                        end,
+                        excerpt,
+                    )
+                )
+            if len(excerpts) >= 6:
+                break
+        return excerpts
